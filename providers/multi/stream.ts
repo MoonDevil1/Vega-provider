@@ -5,7 +5,7 @@ import { vidboltExtractor } from "../extractors/vidbolt";
 import { cineverseExtractor } from "../extractors/cineverse";
 
 
-const REFERER = "https://multimovies.garden/";
+const REFERER = "https://m1.multimovies.courses/";
 
 const BASE_HEADERS: Record<string, string> = {
   Accept:
@@ -375,7 +375,12 @@ export async function getStream({
   // 1) Load page
   let html = "";
   try {
-    const res = await axios.get(link, { headers: BASE_HEADERS, signal });
+    let pageReferer = REFERER;
+  try { pageReferer = new URL(link).origin + "/"; } catch {}
+  const res = await axios.get(link, {
+    headers: { ...BASE_HEADERS, Referer: pageReferer },
+    signal,
+  });
     html = res.data;
   } catch (e: any) {
     console.error("[stream] page load failed: " + (e && e.message));
