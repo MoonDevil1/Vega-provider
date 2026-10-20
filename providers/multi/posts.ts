@@ -199,10 +199,13 @@ export async function getSearchPosts({
 }): Promise<Post[]> {
   const { axios, cheerio } = providerContext;
 
-  const baseUrl = (await getBaseUrl("multi")).replace(/\/+$/, "");
+  const baseUrl = (await getBaseUrl("multi", axios, cheerio)).replace(/\\/+$/, "");
 
-  // ✅ Correct search endpoint
-  const url = `${baseUrl}/search?q=${encodeURIComponent(searchQuery)}`;
+  // Build each search page explicitly so pagination does not repeat page one.
+  const searchUrl = new URL(`${baseUrl}/search`);
+  searchUrl.searchParams.set("q", searchQuery);
+  if (page > 1) searchUrl.searchParams.set("page", String(page));
+  const url = searchUrl.href;
 
   console.log(`[MultiMovies] Searching: ${url}`);
 
