@@ -1,6 +1,6 @@
 # Vega App Provider Extensions
 
-Welcome to the Vega App Provider Template! This repository provides the structure and tools you need to create custom providers (extensions) for the Vega App.
+Welcome to the Vega App Provider Template! Providers are JS scripts that run in a sandbox environment. This repository provides the structure and tools you need to create custom providers (extensions) for the Vega App.
 
 ## Getting Started
 
