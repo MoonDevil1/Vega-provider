@@ -111,6 +111,8 @@ export const getBaseUrl = async (
       cache.expiresAt = Date.now() + cacheTtl;
       return discovered;
     }
+    // Never fall back to the reference repository's potentially stale domain.
+    return fallbackUrl;
   }
 
   const urls = await fetchProviderUrls();
