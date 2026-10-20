@@ -83,11 +83,16 @@ export async function getPosts({
   
   const baseUrl = (await getBaseUrl("multi", axios, cheerio)).replace(/\/+$/, "");
 
-  const route = (filter || "trending").replace(/^\/+/, "").replace(/\/+$/, "");
-  const url =
-    page > 1
-      ? `${baseUrl}/${route}/page/${page}/`
-      : `${baseUrl}/${route}`;
+  const route = (filter || "trending").replace(/^\\/+/, "").replace(/\\/+$/, "");
+  const urlObject = new URL(`${baseUrl}/${route}`);
+  if (page > 1) {
+    if (route === "trending") {
+      urlObject.pathname = "/catalog";
+      urlObject.searchParams.set("sort", "rating");
+    }
+    urlObject.searchParams.set("page", String(page));
+  }
+  const url = urlObject.href;
 
   console.log(`[MultiMovies] Fetching: ${url}`);
 
