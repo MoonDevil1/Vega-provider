@@ -1,11 +1,11 @@
 [
   {
-    "display_name": "EXAMPLE",
-    "value": "example",
+    "display_name": "MultiMovies",
+    "value": "multi",
     "version": "1.0",
-    "icon": "",
+    "icon": "https://cdn.jsdelivr.net/gh/Zenda-Cross/vega-providers@main/assets/multi.png",
     "type": "global",
-    "hasSettings": true,
+    "hasSettings": false,
     "disabled": false
   }
 ]
