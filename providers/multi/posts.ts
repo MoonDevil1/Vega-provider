@@ -199,7 +199,7 @@ export async function getSearchPosts({
 }): Promise<Post[]> {
   const { axios, cheerio } = providerContext;
 
-  const baseUrl = (await getBaseUrl("multi", axios, cheerio)).replace(/\\/+$/, "");
+  const baseUrl = (await getBaseUrl("multi", axios, cheerio)).replace(/\/+$/, "");
 
   // Build each search page explicitly so pagination does not repeat page one.
   const searchUrl = new URL(`${baseUrl}/search`);
