@@ -1,20 +1,16 @@
 export const catalog = [
-  { title: "Trending", filter: "" },
-  { title: "Movies", filter: "movies" },
-  { title: "Series", filter: "series" },
-  { title: "K-drama", filter: "genre/k-drama" },
-
-  /*// OTT
+  { title: "Top Rated", filter: "trending" },
+  { title: "Bollywood Movies", filter: "genre/bollywood-movies" },
+  { title: "Hollywood", filter: "genre/hollywood" },
+  { title: "South Indian", filter: "genre/south-indian" },
+  { title: "Netflix", filter: "genre/netflix" },
   { title: "Amazon Prime", filter: "genre/amazon-prime" },
   { title: "Jio Hotstar", filter: "genre/disney-hotstar" },
-  { title: "Jio OTT", filter: "genre/jio-ott" },
   { title: "K-drama", filter: "genre/k-drama" },
-  { title: "MX Player", filter: "genre/mx-player" },
-  { title: "Netflix", filter: "genre/netflix" },
-  { title: "Sony Liv", filter: "genre/sony-liv" },
-  { title: "Zee 5", filter: "genre/zee-5" },
-
-  // Genre
-  { title: "Action", filter: "genre/action" },*/
-  
+  { title: "Hindi Dub Anime", filter: "genre/anime-hindi" },
+  { title: "Anime Series", filter: "genre/anime-series" },
+  { title: "Action", filter: "genre/action" },
+  { title: "Comedy", filter: "genre/comedy" },
+  { title: "Horror", filter: "genre/horror" },
+  { title: "Thriller", filter: "genre/thriller" },
 ];
