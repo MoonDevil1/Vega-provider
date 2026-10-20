@@ -81,7 +81,7 @@ export async function getPosts({
   const { axios, cheerio } = providerContext;
 
   
-  const baseUrl = (await getBaseUrl("multi")).replace(/\/+$/, "");
+  const baseUrl = (await getBaseUrl("multi", axios, cheerio)).replace(/\/+$/, "");
 
   const route = (filter || "trending").replace(/^\/+/, "").replace(/\/+$/, "");
   const url =
