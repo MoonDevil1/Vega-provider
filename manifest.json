@@ -2,8 +2,8 @@
   {
     "display_name": "MultiMovies",
     "value": "multi",
-    "version": "1.3.3",
-    "icon": "https://cdn.jsdelivr.net/gh/Zenda-Cross/vega-providers@main/assets/multi.png",
+    "version": "1.3.4",
+    "icon": "https://cdn.jsdelivr.net/gh/MoonDevil1/Vega-provider@main/assets/multimovies.svg",
     "type": "global",
     "hasSettings": false,
     "disabled": false
