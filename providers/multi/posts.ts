@@ -62,6 +62,23 @@ function normaliseTitle(t: string): string {
   return String(t || "").replace(/\s+/g, " ").replace("Download", "").trim();
 }
 
+function normaliseContentLink(link: string): string {
+  try {
+    const url = new URL(link);
+    url.hash = "";
+    // Ignore tracking parameters, but preserve meaningful parameters such as season/episode.
+    for (const key of Array.from(url.searchParams.keys())) {
+      if (/^(utm_.+|fbclid|gclid|ref|source)$/i.test(key)) url.searchParams.delete(key);
+    }
+    url.hostname = url.hostname.toLowerCase().replace(/^www\./, "");
+    url.pathname = url.pathname.replace(/\/+$/, "") || "/";
+    url.searchParams.sort();
+    return url.toString();
+  } catch {
+    return link.trim();
+  }
+}
+
 // =====================================================================
 //  getPosts (catalog / browse)
 // =====================================================================
@@ -115,7 +132,7 @@ export async function getPosts({
       if (!rawHref || !isContentLink(rawHref)) return;
 
       const link = resolveUrl(rawHref, baseUrl);
-      if (!link || posts.some((p) => p.link === link)) return;
+      if (!link || posts.some((p) => normaliseContentLink(p.link) === normaliseContentLink(link))) return;
 
       const img = card.find("img").first();
       const title = normaliseTitle(
@@ -137,7 +154,7 @@ export async function getPosts({
         if (!rawHref || !isContentLink(rawHref)) return;
 
         const link = resolveUrl(rawHref, baseUrl);
-        if (!link || posts.some((p) => p.link === link)) return;
+        if (!link || posts.some((p) => normaliseContentLink(p.link) === normaliseContentLink(link))) return;
 
         const img = slide.find("img.cinema-backdrop").first();
         const title = normaliseTitle(
@@ -159,7 +176,7 @@ export async function getPosts({
         if (!rawHref || !isContentLink(rawHref)) return;
 
         const link = resolveUrl(rawHref, baseUrl);
-        if (!link || posts.some((p) => p.link === link)) return;
+        if (!link || posts.some((p) => normaliseContentLink(p.link) === normaliseContentLink(link))) return;
 
         const img = card.find("img").first();
         const title = normaliseTitle(
@@ -229,7 +246,7 @@ export async function getSearchPosts({
       if (!rawHref || !isContentLink(rawHref)) return;
 
       const link = resolveUrl(rawHref, baseUrl);
-      if (!link || posts.some((p) => p.link === link)) return;
+      if (!link || posts.some((p) => normaliseContentLink(p.link) === normaliseContentLink(link))) return;
 
       const img = card.find("img").first();
       const title = normaliseTitle(
@@ -250,7 +267,7 @@ export async function getSearchPosts({
         if (!rawHref || !isContentLink(rawHref)) return;
 
         const link = resolveUrl(rawHref, baseUrl);
-        if (!link || posts.some((p) => p.link === link)) return;
+        if (!link || posts.some((p) => normaliseContentLink(p.link) === normaliseContentLink(link))) return;
 
         const img = card.find("img").first();
         const title = normaliseTitle(
