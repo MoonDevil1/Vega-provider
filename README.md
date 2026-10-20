@@ -38,6 +38,38 @@ To install your custom provider in the Vega app:
 
 ---
 
+## Testing providers with WAF verification
+
+Use Node.js 20.12 or newer, run `npm install`, and install Microsoft Edge or Google Chrome locally. The CLI uses `playwright-core` with your installed browser; no browser download is required.
+
+For a custom browser location, copy `.env.example` to `.env` in the repository root and set an absolute executable path:
+
+```dotenv
+VEGA_BROWSER_PATH="C:/Program Files/Google/Chrome/Application/chrome.exe"
+```
+
+Both CLI commands automatically load this `.env` file. You can also set `VEGA_BROWSER_PATH` in your shell; shell values take precedence. Leave it empty to find Edge, then Chrome automatically. Custom paths support Chromium browsers (Chrome, Edge, Chromium, Brave); Firefox and Safari are unsupported. An invalid custom path reports an error. Local `.env` files are ignored by Git.
+
+```sh
+npm run test:provider -- myProvider getPosts --rebuild
+npm run test:provider -- myProvider getStream --rebuild
+npm test -- myProvider
+```
+
+Both test commands provide `providerContext.openWebView(url, options)`. When your provider calls it, a visible browser opens so you can complete the verification. No extra WAF flag is needed. Press Enter in the terminal when finished, or use `waitForCookie` or an injected script to complete automatically:
+
+```ts
+const result = await providerContext.openWebView(url, {
+  title: "Complete security verification",
+  waitForCookie: "cf_clearance",
+  timeoutMs: 120000,
+});
+// result.data contains rendered HTML, or data sent by the injected script.
+// result.cookies, result.cookieMap, result.url and result.userAgent are available.
+```
+
+`headers` and `injectedJavaScript` are supported. Injected scripts can return data using `window.ReactNativeWebView.postMessage(JSON.stringify({ __waf: true, data: value }))`; scripts are installed again after navigation. Closing the browser cancels the request, and verification times out after two minutes by default. This interactive helper requires a desktop browser session. It does not automatically solve challenges or reproduce every mobile WebView behavior. Keep browser dependencies in the test harness; provider code should only call the injected `providerContext` API.
+
 ## Provider Folder Structure
 
 Each provider lives in its own folder under `providers/`:

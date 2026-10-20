@@ -23,7 +23,10 @@ global.fetch = async (input, init) => {
   return nativeFetch(input, init);
 };
 
+const { openWebView } = require("./open-web-view");
+
 const providerContext = {
+  openWebView,
   axios,
   cheerio,
   commonHeaders: {
