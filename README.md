@@ -38,38 +38,6 @@ To install your custom provider in the Vega app:
 
 ---
 
-## Testing providers with WAF verification
-
-Use Node.js 20.12 or newer, run `npm install`, and install Microsoft Edge or Google Chrome locally. The CLI uses `playwright-core` with your installed browser; no browser download is required.
-
-For a custom browser location, copy `.env.example` to `.env` in the repository root and set an absolute executable path:
-
-```dotenv
-VEGA_BROWSER_PATH="C:/Program Files/Google/Chrome/Application/chrome.exe"
-```
-
-Both CLI commands automatically load this `.env` file. You can also set `VEGA_BROWSER_PATH` in your shell; shell values take precedence. Leave it empty to find Edge, then Chrome automatically. Custom paths support Chromium browsers (Chrome, Edge, Chromium, Brave); Firefox and Safari are unsupported. An invalid custom path reports an error. Local `.env` files are ignored by Git.
-
-```sh
-npm run test:provider -- myProvider getPosts --rebuild
-npm run test:provider -- myProvider getStream --rebuild
-npm test -- myProvider
-```
-
-Both test commands provide `providerContext.openWebView(url, options)`. When your provider calls it, a visible browser opens so you can complete the verification. No extra WAF flag is needed. Press Enter in the terminal when finished, or use `waitForCookie` or an injected script to complete automatically:
-
-```ts
-const result = await providerContext.openWebView(url, {
-  title: "Complete security verification",
-  waitForCookie: "cf_clearance",
-  timeoutMs: 120000,
-});
-// result.data contains rendered HTML, or data sent by the injected script.
-// result.cookies, result.cookieMap, result.url and result.userAgent are available.
-```
-
-`headers` and `injectedJavaScript` are supported. Injected scripts can return data using `window.ReactNativeWebView.postMessage(JSON.stringify({ __waf: true, data: value }))`; scripts are installed again after navigation. Closing the browser cancels the request, and verification times out after two minutes by default. This interactive helper requires a desktop browser session. It does not automatically solve challenges or reproduce every mobile WebView behavior. Keep browser dependencies in the test harness; provider code should only call the injected `providerContext` API.
-
 ## Provider Folder Structure
 
 Each provider lives in its own folder under `providers/`:
@@ -528,30 +496,73 @@ export const getStream = async function ({
 2. Run `npm run test:provider -- provider_name function_name` (example: `npm run test:provider -- showbox getPosts`)
    - This is for testing a single function, such as getPosts, getSearchPosts, getStream, etc. After entering manually, enter the input.
 
+### WAF verification and browser configuration
+
+Use Node.js 20.12 or newer, run `npm install`, and install Microsoft Edge or Google Chrome locally. The CLI uses `playwright-core` with your installed browser; no browser download is required.
+
+For a custom browser location, copy `.env.example` to `.env` in the repository root and set an absolute executable path:
+
+```dotenv
+VEGA_BROWSER_PATH="C:/Program Files/Google/Chrome/Application/chrome.exe"
+```
+
+Both CLI commands automatically load this `.env` file. You can also set `VEGA_BROWSER_PATH` in your shell; shell values take precedence. Leave it empty to find Edge, then Chrome automatically. Custom paths support Chromium browsers (Chrome, Edge, Chromium, Brave); Firefox and Safari are unsupported. An invalid custom path reports an error. Local `.env` files are ignored by Git.
+
+```sh
+npm run test:provider -- myProvider getPosts --rebuild
+npm run test:provider -- myProvider getStream --rebuild
+npm test -- myProvider
+```
+
+Both test commands provide `providerContext.openWebView(url, options)`. When your provider calls it, a visible browser opens so you can complete the verification. No extra WAF flag is needed. Press Enter in the terminal when finished, or use `waitForCookie` or an injected script to complete automatically:
+
+```ts
+const result = await providerContext.openWebView(url, {
+  title: "Complete security verification",
+  waitForCookie: "cf_clearance",
+  timeoutMs: 120000,
+});
+// result.data contains rendered HTML, or data sent by the injected script.
+// result.cookies, result.cookieMap, result.url and result.userAgent are available.
+```
+
+`headers` and `injectedJavaScript` are supported. Injected scripts can return data using `window.ReactNativeWebView.postMessage(JSON.stringify({ __waf: true, data: value }))`; scripts are installed again after navigation. Closing the browser cancels the request, and verification times out after two minutes by default. This interactive helper requires a desktop browser session. It does not automatically solve challenges or reproduce every mobile WebView behavior. Keep browser dependencies in the test harness; provider code should only call the injected `providerContext` API.
+
 ## Test in App
 
-1. **Start the Dev Server**
-   - Run the following command in your terminal:
-     ```sh
-     npm run auto
-     ```
-   - This will start the development server and log a "Mobile test url" (e.g., `http://<your-local-ip>:3001`).
+### Recommended: add the dev server as a provider source
 
-2. **Configure the Vega App for Local Testing**
-   - Open your Vega app project.
-   - Go to `src/lib/services/ExtensionManager.ts`.
-   - Set the following variables in class ExtensionManager:
-     ```ts
-     private testMode = true;
-     private baseUrlTestMode = "http://<your-local-ip>:3001"; // Use the Mobile test url from the dev server
-     ```
-   - This tells the app to use your local providers for testing.
+Use this method with Vega mobile and desktop builds that support HTTP provider sources. It uses the normal provider installation flow and needs no app code changes or test mode.
 
-3. **Network Requirement**
-   - Make sure both your development machine (running the dev server) and your mobile device (running the Vega app) are on the same network.
+1. Build your provider and start the server from the template folder:
+   ```sh
+   npm run build
+   npm run dev
+   ```
+   Alternatively, run `npm run auto` to build, start the server, and rebuild when provider files change.
+2. In the app, open **Settings > Provider Manager > Available Providers**, choose **Add Provider Source** (the plus button), and enter the server URL:
+   - Desktop on the same computer: `http://localhost:3001`
+   - Mobile or another computer: the printed **Mobile Test URL**, for example `http://192.168.1.20:3001`
+   - You can also enter the full manifest URL, such as `http://192.168.1.20:3001/manifest.json`.
+3. Select the added source and install your provider. Its entry must be present in `manifest.json`, and its built files must be available under `dist/`.
+4. Browse, search, and play in the app to test the provider. WAF verification uses the app's own browser/WebView; the CLI's `VEGA_BROWSER_PATH` setting does not apply here.
+5. After changing provider code, rebuild it (or let `npm run auto` rebuild), then update or reinstall the provider in the app. Normal source installation uses installed files and does not hot reload. Increase the provider's manifest version when testing the normal update flow.
 
-4. **Test in the App**
-   - App will now use your local provider code for all requests.
+For a phone or another computer, keep both devices on the same network and allow the dev server through your computer's firewall on port `3001`. On a phone, `localhost` points to the phone, so use the computer's local IP instead. Keep the server running while fetching or updating provider files. If your installed app rejects HTTP sources, update to a build with HTTP source support or use the secondary method below when building the app yourself.
+
+### Secondary: app developer test mode
+
+Use this method when developing the Vega app itself or when you need its test-mode provider loading behavior. It requires access to the app source and rebuilding the app.
+
+1. Start the provider server with `npm run auto`, or run `npm run build` followed by `npm run dev`.
+2. In the mobile or desktop app project, open `src/lib/services/ExtensionManager.ts` and configure:
+   ```ts
+   private testMode = true;
+   private baseUrlTestMode = "http://192.168.1.20:3001";
+   ```
+   Use the server's printed Mobile Test URL for a phone, or `http://localhost:3001` for desktop on the same computer. Preserve the file's existing quote style.
+3. Rebuild and run the app, then test your local providers. Keep the server running and rebuild provider files after edits, or use `npm run auto`.
+4. Restore `testMode = false` when finished, before creating a normal app build.
 
 ---
 
