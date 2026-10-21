@@ -135,7 +135,7 @@ export const getMeta = async function ({
         seasonMap.set(season, {
           title: label,
           // Use query-string style URL
-          episodesLink: `${seriesBase}/season/${season}`,
+          episodesLink: `${seriesBase}?season=${season}`,
         });
       });
 
@@ -150,7 +150,7 @@ export const getMeta = async function ({
 
         seasonMap.set(season, {
           title: `Season ${season}`,
-          episodesLink: `${seriesBase}/season/${season}`,
+          episodesLink: `${seriesBase}?season=${season}`,
         });
       });
 
@@ -168,7 +168,7 @@ export const getMeta = async function ({
         linkList.push({
           title: "Season 1",
           quality: "",
-          episodesLink: `${seriesBase}/season/1`,
+          episodesLink: `${seriesBase}?season=1`,
           directLinks: [],
         });
       }
