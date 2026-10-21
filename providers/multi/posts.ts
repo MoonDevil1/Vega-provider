@@ -101,13 +101,26 @@ export async function getPosts({
   const baseUrl = (await getBaseUrl("multi", axios, cheerio)).replace(/\/+$/, "");
 
   const route = (filter || "trending").replace(/^\/+/, "").replace(/\/+$/, "");
-  const urlObject = route === "trending"
-    ? new URL(`${baseUrl}/catalog`)
-    : new URL(`${baseUrl}/${route}`);
+  const urlObject = new URL(`${baseUrl}/catalog`);
 
-  // The current site paginates its catalog with query parameters. Keep page one
-  // and later pages on the same endpoint and sort to prevent repeated results.
-  if (route === "trending") urlObject.searchParams.set("sort", "rating");
+  // The current MultiMovies site uses /catalog query filters and query-based
+  // pagination. Keep every page on this canonical endpoint to prevent repeats.
+  if (route === "trending") {
+    urlObject.searchParams.set("sort", "rating");
+  } else if (route === "movies") {
+    urlObject.searchParams.set("type", "movie");
+    urlObject.searchParams.set("sort", "latest");
+  } else if (route === "series") {
+    urlObject.searchParams.set("type", "tv");
+    urlObject.searchParams.set("sort", "latest");
+  } else if (route.startsWith("genre/")) {
+    urlObject.searchParams.set("genre", route.slice("genre/".length));
+    urlObject.searchParams.set("sort", "latest");
+  } else {
+    // Preserve supported catalog routes as a category slug when possible.
+    urlObject.searchParams.set("genre", route);
+    urlObject.searchParams.set("sort", "latest");
+  }
   urlObject.searchParams.set("page", String(Math.max(1, page)));
   const url = urlObject.href;
   console.log(`[MultiMovies] Fetching: ${url}`);
