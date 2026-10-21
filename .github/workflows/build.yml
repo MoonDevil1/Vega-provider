@@ -6,6 +6,7 @@ on:
       - main
     paths:
       - "providers/**"
+      - "tests/test-aniwatch.js"
       - "manifest.json"
       - "build-bundled.js"
       - "package.json"
@@ -43,3 +44,5 @@ jobs:
           test -s dist/aniwatch/stream.js
           test -s dist/aniwatch/episodes.js
           test -s dist/aniwatch/catalog.js
+      - name: Run AniWatch regression tests
+        run: node tests/test-aniwatch.js
