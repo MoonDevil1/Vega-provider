@@ -168,7 +168,7 @@ export const getMeta = async function ({
         linkList.push({
           title: "Season 1",
           quality: "",
-          episodesLink: `${seriesBase}?season=1`,
+          episodesLink: `${seriesBase}/season/1`,
           directLinks: [],
         });
       }
