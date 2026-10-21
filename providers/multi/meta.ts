@@ -135,7 +135,7 @@ export const getMeta = async function ({
         seasonMap.set(season, {
           title: label,
           // Use query-string style URL
-          episodesLink: `${seriesBase}?season=${season}`,
+          episodesLink: `${seriesBase}/season/${season}`,
         });
       });
 
@@ -150,7 +150,7 @@ export const getMeta = async function ({
 
         seasonMap.set(season, {
           title: `Season ${season}`,
-          episodesLink: `${seriesBase}?season=${season}`,
+          episodesLink: `${seriesBase}/season/${season}`,
         });
       });
 
