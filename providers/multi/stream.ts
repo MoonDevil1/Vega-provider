@@ -314,6 +314,25 @@ async function resolveFilmu(
 /* ================================================================== */
 /*  Route dispatcher — passes inner signal so timeout actually cancels */
 /* ================================================================== */
+/* Direct media URLs need no embed resolver. Keep this generic and only
+ * classify explicit media-file URLs; unknown embed pages remain fallbacks. */
+function directMediaType(url: string): string | null {
+  try {
+    const parsed = new URL(url);
+    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") return null;
+    const path = parsed.pathname.toLowerCase();
+    if (/\.m3u8$/.test(path)) return "m3u8";
+    if (/\.mpd$/.test(path)) return "mpd";
+    if (/\.(mp4|m4v)$/.test(path)) return "mp4";
+  } catch {}
+  return null;
+}
+
+function directMediaStream(url: string, server: string): Stream[] {
+  const mediaType = directMediaType(url);
+  return mediaType ? [{ server, link: url, type: mediaType }] : [];
+}
+
 async function routeServer(
   url: string,
   mediaType: MediaType,
@@ -371,6 +390,9 @@ export async function getStream({
   const axios = providerContext.axios;
   const cheerio = providerContext.cheerio;
   const t0 = Date.now();
+  // Direct media URLs should go straight to Vega's existing player.
+  const inputMedia = directMediaStream(link, "Direct media");
+  if (inputMedia.length > 0) return inputMedia;
 
   // 1) Load page
   let html = "";
@@ -402,7 +424,12 @@ export async function getStream({
     const t = Date.now();
 
     return raceWithAbort(
-      (innerSignal) => routeServer(server.url, mediaType, innerSignal, providerContext),
+      (innerSignal) => {
+        const direct = directMediaStream(server.url, server.name);
+        return direct.length > 0
+          ? Promise.resolve(direct)
+          : routeServer(server.url, mediaType, innerSignal, providerContext);
+      },
       budget,
       server.name,
     ).then(
