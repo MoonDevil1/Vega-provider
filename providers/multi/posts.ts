@@ -101,14 +101,14 @@ export async function getPosts({
   const baseUrl = (await getBaseUrl("multi", axios, cheerio)).replace(/\/+$/, "");
 
   const route = (filter || "trending").replace(/^\/+/, "").replace(/\/+$/, "");
-  const urlObject = new URL(`${baseUrl}/${route}`);
-  if (page > 1) {
-    if (route === "trending") {
-      urlObject.pathname = "/catalog";
-      urlObject.searchParams.set("sort", "rating");
-    }
-    urlObject.searchParams.set("page", String(page));
-  }
+  const urlObject = route === "trending"
+    ? new URL(`${baseUrl}/catalog`)
+    : new URL(`${baseUrl}/${route}`);
+
+  // The current site paginates its catalog with query parameters. Keep page one
+  // and later pages on the same endpoint and sort to prevent repeated results.
+  if (route === "trending") urlObject.searchParams.set("sort", "rating");
+  urlObject.searchParams.set("page", String(Math.max(1, page)));
   const url = urlObject.href;
   console.log(`[MultiMovies] Fetching: ${url}`);
 
@@ -218,10 +218,13 @@ export async function getSearchPosts({
 
   const baseUrl = (await getBaseUrl("multi", axios, cheerio)).replace(/\/+$/, "");
 
-  // Build each search page explicitly so pagination does not repeat page one.
-  const searchUrl = new URL(`${baseUrl}/search`);
-  searchUrl.searchParams.set("q", searchQuery);
-  if (page > 1) searchUrl.searchParams.set("page", String(page));
+  // The live site paginates search through /catalog with q + sort + page.
+  // Use the canonical endpoint on every page to avoid later pages falling
+  // back to the first page.
+  const searchUrl = new URL(`${baseUrl}/catalog`);
+  searchUrl.searchParams.set("q", searchQuery.trim());
+  searchUrl.searchParams.set("sort", "latest");
+  searchUrl.searchParams.set("page", String(Math.max(1, page)));
   const url = searchUrl.href;
 
   console.log(`[MultiMovies] Searching: ${url}`);
