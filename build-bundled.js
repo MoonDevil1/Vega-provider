@@ -4,6 +4,7 @@ const path = require("path");
 const { minify } = require("terser");
 
 const SKIP_MINIFY = process.env.SKIP_MINIFY === "true";
+const buildErrors = [];
 
 // Find all provider directories
 const providersDir = path.join(__dirname, "providers");
@@ -140,10 +141,9 @@ async function buildProvider(providerName) {
         `✓ ${providerName}/${moduleName}.js (${(code.length / 1024).toFixed(1)}kb)`,
       );
     } catch (error) {
-      console.error(
-        `✗ Error building ${providerName}/${moduleName}:`,
-        error.message,
-      );
+      const message = `${providerName}/${moduleName}: ${error.message}`;
+      buildErrors.push(message);
+      console.error(`✗ Error building ${message}`);
     }
   }
 
@@ -183,7 +183,9 @@ async function buildUtilityFiles() {
 
       console.log(`✓ ${utilityName}.js (${(code.length / 1024).toFixed(1)}kb)`);
     } catch (error) {
-      console.error(`✗ Error building ${utilityName}:`, error.message);
+      const message = `${utilityName}: ${error.message}`;
+      buildErrors.push(message);
+      console.error(`✗ Error building ${message}`);
     }
   }
 }
@@ -218,6 +220,10 @@ async function buildAll() {
     `\n✓ Built ${totalModules} modules from ${providerDirs.length} providers in ${((endTime - startTime) / 1000).toFixed(2)}s`,
   );
   console.log(`  Total size: ${(totalSize / 1024).toFixed(1)}kb`);
+
+  if (buildErrors.length > 0) {
+    throw new Error(`Build failed for ${buildErrors.length} module(s):\n- ${buildErrors.join("\n- ")}`);
+  }
 }
 
 buildAll().catch((error) => {
