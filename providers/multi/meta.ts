@@ -125,16 +125,18 @@ export const getMeta = async function ({
         { title: string; episodesLink: string }
       >();
 
-      // 1) Season dropdown
-      $(".cinejoy-season-select option").each((_, opt) => {
+      // The page has two controls sharing the .cinejoy-season-select class:
+      // a season selector and an episode-range selector (e.g. "Episodes 25–32").
+      // Only the season dropdown represents seasons.
+      $(".cinejoy-season-pill-dropdown select[aria-label='Season'] option").each((_, opt) => {
         const season = ($(opt).attr("value") || "").trim();
-        if (!season) return;
+        if (!season || !/^\d+$/.test(season)) return;
 
-        const label = $(opt).text().trim() || `Season ${season}`;
+        const label = $(opt).text().replace(/\s+/g, " ").trim() || `Season ${season}`;
 
         seasonMap.set(season, {
           title: label,
-          // Use query-string style URL
+          // The live site honors season + episode-range query parameters.
           episodesLink: `${seriesBase}?season=${season}`,
         });
       });
