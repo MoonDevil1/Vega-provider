@@ -356,7 +356,7 @@ async function routeServer(
   if (FILMU_RE.test(url)) {
     return resolveFilmu(url, mediaType, signal, ctx);
   }
-  return [];
+  return resolvePublicEmbed(url, signal, ctx);
 }
 
 /* ================================================================== */
@@ -408,7 +408,7 @@ async function resolvePublicEmbed(
       if (resolved.length) return resolved;
     }
   }
-  return resolvePublicEmbed(url, signal, ctx);
+  return [];
 }
 
 /*  Media type detection                                               */
