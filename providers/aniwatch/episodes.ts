@@ -5,56 +5,82 @@ const HEADERS = {
   "Accept-Language": "en-US,en;q=0.9",
   "User-Agent": "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Mobile Safari/537.36",
 };
-function abs(value: string, base: string): string {
+
+function absolute(value: string, base: string): string {
   try { return new URL(value, base).toString(); } catch { return ""; }
 }
-function parseSkip($: any): { title: string; from: number; to: number }[] {
-  const out: { title: string; from: number; to: number }[] = [];
-  const groups = [
-    ["data-skip-intro-start", "data-skip-intro-end", "Intro"],
-    ["data-intro-start", "data-intro-end", "Intro"],
-    ["data-skip-outro-start", "data-skip-outro-end", "Outro"],
-    ["data-outro-start", "data-outro-end", "Outro"],
-  ];
-  for (const [a, b, title] of groups) {
-    const from = Number($("[" + a + "]").first().attr(a));
-    const to = Number($("[" + b + "]").first().attr(b));
-    if (Number.isFinite(from) && Number.isFinite(to) && from >= 0 && to > from) out.push({ title, from, to });
-  }
-  return out;
+function clean(value: string): string {
+  return String(value || "").replace(/\\s+/g, " ").trim();
 }
-export async function getEpisodes({ url, providerContext }: { url: string; providerContext: ProviderContext }): Promise<EpisodeLink[]> {
+function episodeNumber(value: string): number {
+  const match = String(value || "").match(/(?:episode|ep)?\\s*0*(\\d+(?:\\.\\d+)?)/i);
+  return match ? Number(match[1]) : Number.MAX_SAFE_INTEGER;
+}
+
+export async function getEpisodes({ url, providerContext }: {
+  url: string; providerContext: ProviderContext;
+}): Promise<EpisodeLink[]> {
   try {
     const parsed = new URL(url);
     if (parsed.hostname !== "aniwatch.lu" && !parsed.hostname.endsWith(".aniwatch.lu")) return [];
-    const res = await providerContext.axios.get(parsed.toString(), { headers: { ...HEADERS, Referer: "https://aniwatch.lu/" }, timeout: 15000, maxRedirects: 5 });
-    const $ = providerContext.cheerio.load(res.data);
+
+    const response = await providerContext.axios.get(parsed.toString(), {
+      headers: { ...HEADERS, Referer: "https://aniwatch.lu/" },
+      timeout: 15000,
+      maxRedirects: 5,
+    });
+    const $ = providerContext.cheerio.load(response.data);
     const episodes: EpisodeLink[] = [];
     const seen = new Set<string>();
-    $("#episodes-content .ss-list .ep-item, #episodes-content a.ep-item, .detail-seasons .ep-item").each((_i: number, node: any) => {
-      const a = $(node);
-      const href = abs(a.attr("href") || "", parsed.origin);
-      if (!href || seen.has(href)) return;
-      seen.add(href);
-      const number = (a.attr("data-number") || a.find(".ssli-order").text() || "").trim();
-      const name = (a.find(".ep-name").text() || a.attr("title") || "").replace(/\s+/g, " ").trim();
-      const title = name || (number ? "Episode " + number : "Episode");
-      const skip = parseSkip($);
-      episodes.push({ title, link: href, skip: skip.length ? skip : undefined });
-    });
-    if (episodes.length) return episodes;
 
-    // Some titles expose only an episode link from their detail page.
-    const first = $("a[href*='-episode-']").filter((_i: number, el: any) => {
-      const href = $(el).attr("href") || "";
-      return /aniwatch\.lu/i.test(href);
-    }).first();
-    const href = abs(first.attr("href") || "", parsed.origin);
-    if (href && href !== parsed.toString()) {
-      const label = (first.attr("title") || first.text() || "Episode 1").replace(/\s+/g, " ").trim();
-      return [{ title: label, link: href }];
+    // Aniwatch currently renders large series in several hidden .ss-list
+    // containers (for example EPS 001-100, EPS 101-200, etc.). Parse every
+    // page container, not only the visible/current batch.
+    const selectors = [
+      "#episodes-content .ss-list a.ep-item",
+      "#episodes-content a.ep-item",
+      "#episodes-content a[href*='-episode-']",
+      ".detail-seasons a[href*='-episode-']",
+      "a.ep-item[href*='-episode-']",
+    ];
+
+    for (const selector of selectors) {
+      $(selector).each((_i: number, node: any) => {
+        const a = $(node);
+        const href = absolute(a.attr("href") || "", parsed.origin);
+        if (!href || seen.has(href) || !/-episode-[^/]+\\/?(?:[?#].*)?$/i.test(new URL(href).pathname + new URL(href).search)) return;
+
+        const number = clean(a.attr("data-number") || a.find(".ssli-order").attr("title") || a.find(".ssli-order").text() || "");
+        const name = clean(
+          a.find(".ep-name").attr("title") ||
+          a.find(".ep-name").text() ||
+          a.attr("title") ||
+          ""
+        );
+        const title = name || (number ? "Episode " + number : "Episode " + (episodes.length + 1));
+        seen.add(href);
+        episodes.push({ title, link: href });
+      });
     }
-    return [];
+
+    // Some versions render the active episode separately from the paginated
+    // list, or omit the ep-item class. Keep the fallback broad but URL-specific.
+    if (!episodes.length) {
+      $("a[href*='-episode-']").each((_i: number, node: any) => {
+        const a = $(node);
+        const href = absolute(a.attr("href") || "", parsed.origin);
+        if (!href || seen.has(href)) return;
+        let target: URL;
+        try { target = new URL(href); } catch { return; }
+        if (target.hostname !== parsed.hostname || !/-episode-[^/]+\\/?$/i.test(target.pathname)) return;
+        const title = clean(a.find(".ep-name").text() || a.attr("title") || a.text()) || "Episode " + (episodes.length + 1);
+        seen.add(href);
+        episodes.push({ title, link: href });
+      });
+    }
+
+    episodes.sort((a, b) => episodeNumber(a.title) - episodeNumber(b.title));
+    return episodes;
   } catch (error) {
     console.warn("[Aniwatch] episode request failed:", error);
     return [];
