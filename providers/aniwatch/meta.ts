@@ -10,7 +10,7 @@ function abs(value: string, base: string): string {
   try { return new URL(value, base).toString(); } catch { return ""; }
 }
 function clean(value: string): string {
-  return String(value || "").replace(/\\s+/g, " ").trim();
+  return String(value || "").replace(/\s+/g, " ").trim();
 }
 
 export async function getMeta({ link, providerContext }: {
@@ -27,7 +27,7 @@ export async function getMeta({ link, providerContext }: {
       maxRedirects: 5,
     });
     const $ = providerContext.cheerio.load(response.data);
-    const episodePage = /-episode-\\d+/i.test(url.pathname) || $("#ani_detail[data-episode-number]").length > 0;
+    const episodePage = /-episode-\d+/i.test(url.pathname) || $("#ani_detail[data-episode-number]").length > 0;
 
     const title = clean(
       $(".anis-watch-detail .anisc-detail h2.film-name a").first().text() ||
@@ -37,11 +37,13 @@ export async function getMeta({ link, providerContext }: {
       $(".breadcrumb .breadcrumb-item.active").last().attr("data-jname") ||
       $("meta[property='og:title']").attr("content") ||
       $("title").text()
-    ).replace(/\\s+(English )?Sub\\/?Dub.*$/i, "");
+    ).replace(/\s+(English )?Sub\/?Dub.*$/i, "");
 
+    const style = $(".anis-cover").first().attr("style") || "";
+    const coverImage = style.match(/url\(['"]?(.*?)['"]?\)/i)?.[1] || "";
     const image = $(".anis-watch-detail .anisc-poster img").first().attr("src") ||
       $(".anisc-poster img.film-poster-img").first().attr("src") ||
-      $(".anis-cover").first().css("background-image")?.match(/url\\(['"]?(.*?)['"]?\\)/i)?.[1] ||
+      coverImage ||
       $("meta[property='og:image']").attr("content") || "";
 
     const synopsis = clean($(".film-description .text").first().text() ||
@@ -55,20 +57,18 @@ export async function getMeta({ link, providerContext }: {
 
     const linkList: Link[] = [];
     const seasonSeen = new Set<string>();
-    // Support the season links used by multi-season titles. Avoid interpreting
-    // episode cards and the EPS 001-100 pagination controls as seasons.
     $(".detail-seasons .ss-item, .detail-seasons .season-item, .detail-seasons [data-season], .season-list a, .seasons-list a").each((_i: number, el: any) => {
       const item = $(el);
       const href = abs(item.attr("href") || item.find("a[href]").first().attr("href") || "", url.origin);
       const label = clean(item.attr("title") || item.text() || item.attr("data-season") || "");
-      if (!href || !label || /episode|^eps?\\s*:?\\s*\\d/i.test(label) || /-episode-\\d+/i.test(new URL(href).pathname)) return;
+      if (!href || !label || /episode|^eps?\s*:?\s*\d/i.test(label) || /-episode-\d+/i.test(new URL(href).pathname)) return;
       if (seasonSeen.has(href)) return;
       seasonSeen.add(href);
       linkList.push({ title: label, quality: "", episodesLink: href, directLinks: [] });
     });
 
-    // If no explicit seasons exist, pass the actual page containing the
-    // episode-list markup to getEpisodeLinks; do not invent a season URL.
+    // The site uses episode-range pagination for long series; those are batches,
+    // not seasons. Give Vega the actual page with the episode-list markup.
     if (!linkList.length) {
       linkList.push({
         title: "Episodes",
@@ -81,7 +81,7 @@ export async function getMeta({ link, providerContext }: {
     return {
       title: title || "Aniwatch",
       synopsis,
-      image: abs(image.replace(/^url\\(['"]?|['"]?\\)$/g, ""), url.origin),
+      image: abs(image, url.origin),
       imdbId: "",
       type: "series",
       linkList,
