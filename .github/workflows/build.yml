@@ -44,5 +44,7 @@ jobs:
           test -s dist/aniwatch/stream.js
           test -s dist/aniwatch/episodes.js
           test -s dist/aniwatch/catalog.js
+      - name: Run MultiMovies regression tests
+        run: node tests/test-multi.js
       - name: Run AniWatch regression tests
         run: node tests/test-aniwatch.js
