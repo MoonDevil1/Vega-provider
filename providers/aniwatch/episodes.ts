@@ -10,10 +10,10 @@ function absolute(value: string, base: string): string {
   try { return new URL(value, base).toString(); } catch { return ""; }
 }
 function clean(value: string): string {
-  return String(value || "").replace(/\\s+/g, " ").trim();
+  return String(value || "").replace(/\s+/g, " ").trim();
 }
 function episodeNumber(value: string): number {
-  const match = String(value || "").match(/(?:episode|ep)?\\s*0*(\\d+(?:\\.\\d+)?)/i);
+  const match = String(value || "").match(/(?:episode|ep)?\s*0*(\d+(?:\.\d+)?)/i);
   return match ? Number(match[1]) : Number.MAX_SAFE_INTEGER;
 }
 
@@ -33,9 +33,8 @@ export async function getEpisodes({ url, providerContext }: {
     const episodes: EpisodeLink[] = [];
     const seen = new Set<string>();
 
-    // Aniwatch currently renders large series in several hidden .ss-list
-    // containers (for example EPS 001-100, EPS 101-200, etc.). Parse every
-    // page container, not only the visible/current batch.
+    // Aniwatch renders long series in hidden .ss-list containers (EPS 001-100,
+    // EPS 101-200, etc.). Read every batch, not only the visible one.
     const selectors = [
       "#episodes-content .ss-list a.ep-item",
       "#episodes-content a.ep-item",
@@ -48,23 +47,20 @@ export async function getEpisodes({ url, providerContext }: {
       $(selector).each((_i: number, node: any) => {
         const a = $(node);
         const href = absolute(a.attr("href") || "", parsed.origin);
-        if (!href || seen.has(href) || !/-episode-[^/]+\\/?(?:[?#].*)?$/i.test(new URL(href).pathname + new URL(href).search)) return;
+        if (!href || seen.has(href)) return;
+        let target: URL;
+        try { target = new URL(href); } catch { return; }
+        if (target.hostname !== parsed.hostname || !/-episode-[^/]+\/?$/i.test(target.pathname)) return;
 
         const number = clean(a.attr("data-number") || a.find(".ssli-order").attr("title") || a.find(".ssli-order").text() || "");
-        const name = clean(
-          a.find(".ep-name").attr("title") ||
-          a.find(".ep-name").text() ||
-          a.attr("title") ||
-          ""
-        );
+        const name = clean(a.find(".ep-name").attr("title") || a.find(".ep-name").text() || a.attr("title") || "");
         const title = name || (number ? "Episode " + number : "Episode " + (episodes.length + 1));
         seen.add(href);
         episodes.push({ title, link: href });
       });
     }
 
-    // Some versions render the active episode separately from the paginated
-    // list, or omit the ep-item class. Keep the fallback broad but URL-specific.
+    // Fallback for layouts that omit the ep-item class.
     if (!episodes.length) {
       $("a[href*='-episode-']").each((_i: number, node: any) => {
         const a = $(node);
@@ -72,7 +68,7 @@ export async function getEpisodes({ url, providerContext }: {
         if (!href || seen.has(href)) return;
         let target: URL;
         try { target = new URL(href); } catch { return; }
-        if (target.hostname !== parsed.hostname || !/-episode-[^/]+\\/?$/i.test(target.pathname)) return;
+        if (target.hostname !== parsed.hostname || !/-episode-[^/]+\/?$/i.test(target.pathname)) return;
         const title = clean(a.find(".ep-name").text() || a.attr("title") || a.text()) || "Episode " + (episodes.length + 1);
         seen.add(href);
         episodes.push({ title, link: href });
