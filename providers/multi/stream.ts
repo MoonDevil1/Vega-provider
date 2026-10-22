@@ -360,6 +360,57 @@ async function routeServer(
 }
 
 /* ================================================================== */
+/* Resolve plain, non-DRM media URLs exposed in embed HTML or nested iframes.
+ * Fallback for new MultiMovies hosts; this does not decrypt DRM. */
+async function resolvePublicEmbed(
+  url: string, signal: AbortSignal, ctx: ProviderContext,
+  depth: number = 0, seen: Set<string> = new Set<string>(),
+): Promise<Stream[]> {
+  if (depth > 2 || seen.has(url)) return [];
+  seen.add(url);
+  const direct = directMediaStream(url, "Direct media");
+  if (direct.length) return direct;
+  let html = "";
+  try {
+    const origin = new URL(url).origin;
+    const r = await ctx.axios.get(url, {
+      headers: { ...BASE_HEADERS, Referer: origin + "/" },
+      signal, timeout: 8000, maxRedirects: 4,
+    });
+    html = typeof r.data === "string" ? r.data : JSON.stringify(r.data || "");
+  } catch { return []; }
+
+  const decoded = html.replace(/\\u0026/g, "&").replace(/\\u003d/g, "=")
+    .replace(/\\\//g, "/").replace(/&amp;/g, "&");
+  const candidates: string[] = [];
+  const mediaRe = /(?:https?:)?\/\/[^"'\\\s<>]+?\.(?:m3u8|mp4|m4v)(?:\?[^"'\\\s<>]*)?/gi;
+  let match: RegExpExecArray | null;
+  while ((match = mediaRe.exec(decoded)) !== null) {
+    let candidate = match[0];
+    if (candidate.startsWith("//")) candidate = "https:" + candidate;
+    if (/^https?:\/\//i.test(candidate) && !candidates.includes(candidate)) candidates.push(candidate);
+  }
+  for (const candidate of candidates) {
+    const media = directMediaStream(candidate, "Resolved media");
+    if (media.length) return media;
+  }
+  if (depth < 2) {
+    const iframeRe = /<(?:iframe|source)\b[^>]*\b(?:src|data-src)\s*=\s*["']([^"']+)["']/gi;
+    const nested: string[] = [];
+    while ((match = iframeRe.exec(html)) !== null) {
+      try {
+        const candidate = new URL(match[1].replace(/&amp;/g, "&"), url).toString();
+        if (/^https?:/i.test(candidate) && !seen.has(candidate) && !nested.includes(candidate)) nested.push(candidate);
+      } catch {}
+    }
+    for (const candidate of nested.slice(0, 4)) {
+      const resolved = await resolvePublicEmbed(candidate, signal, ctx, depth + 1, seen);
+      if (resolved.length) return resolved;
+    }
+  }
+  return resolvePublicEmbed(url, signal, ctx);
+}
+
 /*  Media type detection                                               */
 /* ================================================================== */
 function detectMediaType(type: string, link: string, html: string): MediaType {
