@@ -24,7 +24,8 @@ const FILMU_RE     = /embed\.filmu\.in\//i;
 
 /* Per-server timeouts (ms). Fast ones get short budgets. */
 const TIMEOUTS: Record<string, number> = {
-  Cineverse: 15000,   // reduced from 30s, this one was the killer
+  Cineverse: 15000,
+  IQST: 30000,        // IQSmart needs several sequential API stages before it returns a media URL
   "GD mirror": 12000,
   VIDOUT: 5000,
   Filmu: 10000,
