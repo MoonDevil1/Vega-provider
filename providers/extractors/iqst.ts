@@ -466,7 +466,7 @@ async function resolveEmbedMedia(
   }
   const decoded = deEscape(html).replace(/&amp;/g, "&")
     .replace(/\\u0026/g, "&").replace(/\\u003d/g, "=");
-  const mediaRe = /https?:\\?\\?\/\\?\\/[^"'\\s<>\\]+?\\?\.(?:m3u8|mp4|m4v)(?:\\?[^"'\\s<>]*)?/gi;
+  const mediaRe = /https?:\/\/[^"'\\s<>]+?\.(?:m3u8|mp4|m4v)(?:\?[^"'\\s<>]*)?/gi;
   const found: Stream[] = [];
   const mediaSeen: Record<string, boolean> = {};
   let match: RegExpExecArray | null;
