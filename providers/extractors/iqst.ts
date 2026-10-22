@@ -444,6 +444,56 @@ async function dispatchMirror(
 /* ================================================================== */
 /*  IQST EXTRACTOR                                                     */
 /* ================================================================== */
+
+/* Resolve publicly exposed, non-DRM media URLs from newer embed pages. */
+async function resolveEmbedMedia(
+  pageUrl: string, axios: any, headers: Record<string, string>,
+  signal?: AbortSignal, depth: number = 0, seen: Record<string, boolean> = {},
+): Promise<Stream[]> {
+  if (depth > 3 || seen[pageUrl]) return [];
+  seen[pageUrl] = true;
+  let html = "";
+  try {
+    const origin = new URL(pageUrl).origin;
+    const response = await axios.get(pageUrl, {
+      headers: Object.assign({}, headers, { Referer: origin + "/" }),
+      signal, timeout: 7000, maxRedirects: 4,
+    });
+    html = typeof response.data === "string" ? response.data : JSON.stringify(response.data || "");
+  } catch (e: any) {
+    console.log("[iqst] embed fallback fetch failed: " + (e && e.message));
+    return [];
+  }
+  const decoded = deEscape(html).replace(/&amp;/g, "&")
+    .replace(/\\u0026/g, "&").replace(/\\u003d/g, "=");
+  const mediaRe = /https?:\\?\\?\/\\?\\/[^"'\\s<>\\]+?\\?\.(?:m3u8|mp4|m4v)(?:\\?[^"'\\s<>]*)?/gi;
+  const found: Stream[] = [];
+  const mediaSeen: Record<string, boolean> = {};
+  let match: RegExpExecArray | null;
+  while ((match = mediaRe.exec(decoded)) !== null) {
+    const mediaUrl = match[0].replace(/\\\\/g, "");
+    if (mediaSeen[mediaUrl]) continue;
+    mediaSeen[mediaUrl] = true;
+    found.push({ server: "IQSmart direct", link: mediaUrl,
+      type: /\\.(mp4|m4v)(?:[?#]|$)/i.test(mediaUrl) ? "mp4" : "m3u8" });
+  }
+  if (found.length) return found;
+  if (depth >= 3) return [];
+  const frameRe = /<(?:iframe|source)\\b[^>]*\\b(?:src|data-src|data-link)\\s*=\\s*["']([^"']+)["']/gi;
+  const frames: string[] = [];
+  while ((match = frameRe.exec(html)) !== null) {
+    try {
+      const frameUrl = new URL(match[1].replace(/&amp;/g, "&"), pageUrl).toString();
+      if (/^https?:/i.test(frameUrl) && !seen[frameUrl] && frames.indexOf(frameUrl) < 0) frames.push(frameUrl);
+    } catch {}
+  }
+  for (let i = 0; i < Math.min(frames.length, 6); i++) {
+    const nested = await resolveEmbedMedia(frames[i], axios, headers, signal, depth + 1, seen);
+    if (nested.length) return nested;
+  }
+  return [];
+}
+
 export async function iqstExtractor(
   link: string,
   signal: AbortSignal,
@@ -463,8 +513,10 @@ export async function iqstExtractor(
     /* 1. File slugs */
     const files = await fetchFiles(link, axios, headers, signal);
     if (files.length === 0) {
-      console.log("[iqst] no files found");
-      return [];
+      console.log("[iqst] legacy file API unavailable; trying embed media extraction");
+      const direct = await resolveEmbedMedia(link, axios, headers, signal);
+      console.log("[iqst] embed fallback returned " + direct.length + " media URL(s)");
+      return direct;
     }
 
     /* 2. Fetch mirrors for all files in parallel */
