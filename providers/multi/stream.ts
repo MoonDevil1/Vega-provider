@@ -591,6 +591,7 @@ export async function getStream({
   for (let i = 0; i < settled.length; i++) {
     const { server, streams } = settled[i];
     if (streams.length === 0) {
+      if (/rozgarlelo\\.modiplay\\.xyz\\/embed\\//i.test(server.url) || /streams\\.iqsmartgames\\.com\\/embed\\//i.test(server.url)) continue;
       fallbacks.push({
         server: server.name + " (embed)",
         link: server.url,
