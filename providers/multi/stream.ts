@@ -24,13 +24,13 @@ const FILMU_RE     = /embed\.filmu\.in\//i;
 
 /* Per-server timeouts (ms). Fast ones get short budgets. */
 const TIMEOUTS: Record<string, number> = {
-  Cineverse: 15000,
-  IQST: 30000,        // IQSmart needs several sequential API stages before it returns a media URL
-  "GD mirror": 12000,
+  Cineverse: 8000,
+  IQST: 10000,
+  "GD mirror": 8000,
   VIDOUT: 5000,
-  Filmu: 10000,
-  VidBolt: 12000,
-  default: 12000,
+  Filmu: 8000,
+  VidBolt: 8000,
+  default: 8000,
 };
 
 
@@ -583,7 +583,28 @@ export async function getStream({
     );
   });
 
-  const settled = await Promise.all(jobs);
+  // Do not make a fast mirror wait for every slow mirror. Collect results as
+  // they finish and cap this lookup; unresolved slow servers can be tried on
+  // the next play attempt instead of blocking all playback.
+  const completed: Array<{ server: ServerEntry; streams: Stream[] }> = [];
+  let completedCount = 0;
+  let deadlineTimer: ReturnType<typeof setTimeout> | undefined;
+  const trackedJobs = jobs.map((job) => job.then((result) => {
+    completed.push(result);
+    completedCount++;
+    return result;
+  }));
+  await Promise.race([
+    Promise.all(trackedJobs),
+    new Promise<void>((resolve) => {
+      deadlineTimer = setTimeout(resolve, 9000);
+    }),
+  ]);
+  if (deadlineTimer) clearTimeout(deadlineTimer);
+  const settled = completed;
+  if (completedCount < jobs.length) {
+    console.warn("[stream] returning partial results after 9000ms (" + completedCount + "/" + jobs.length + " servers finished)");
+  }
 
   // 4) Merge
   const streamLinks: StreamEx[] = [];
