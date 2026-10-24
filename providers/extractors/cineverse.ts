@@ -43,6 +43,7 @@ interface ServerItem {
   platform: string;
   name: string;
   code: string;
+  url?: string;
 }
 
 /* ================================================================== */
