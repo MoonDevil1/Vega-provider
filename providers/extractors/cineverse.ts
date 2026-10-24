@@ -210,25 +210,59 @@ function extractDirectMedia(html: string, pageUrl: string): { url: string; type:
   return out;
 }
 async function resolveModernMirror(server: ServerItem, axios: any, headers: Record<string, string>, signal?: AbortSignal): Promise<StreamOut[]> {
-  const url = server.url || ""; if (!url) return [];
-  try {
-    const response = await axios.get(url, { headers: { ...headers, Referer: HUB + "/" }, signal, timeout: 6500, maxRedirects: 4, validateStatus: (status: number) => status < 500 });
-    const body = typeof response.data === "string" ? response.data : JSON.stringify(response.data || {});
-    const media = extractDirectMedia(body, url);
-    if (media.length) return media.map((item) => ({ server: server.name, link: item.url, type: item.type, headers: { "User-Agent": MOBILE_UA, Referer: new URL(url).origin + "/" } }));
-    const iframeRe = /<(?:iframe|source)\b[^>]*\b(?:src|data-src)\s*=\s*["']([^"']+)["']/gi;
-    let m: RegExpExecArray | null;
-    while ((m = iframeRe.exec(body)) !== null) {
-      try {
-        const nestedUrl = new URL(m[1].replace(/&amp;/g, "&"), url).toString();
-        const nestedResponse = await axios.get(nestedUrl, { headers: { ...headers, Referer: url }, signal, timeout: 4500, maxRedirects: 3 });
-        const nestedBody = typeof nestedResponse.data === "string" ? nestedResponse.data : JSON.stringify(nestedResponse.data || {});
-        const nestedMedia = extractDirectMedia(nestedBody, nestedUrl);
-        if (nestedMedia.length) return nestedMedia.map((item) => ({ server: server.name, link: item.url, type: item.type, headers: { "User-Agent": MOBILE_UA, Referer: new URL(nestedUrl).origin + "/" } }));
-      } catch {}
+  const startUrl = server.url || "";
+  if (!startUrl) return [];
+  const visited = new Set<string>();
+  const maxDepth = 4;
+
+  async function inspect(pageUrl: string, parentUrl: string, depth: number): Promise<StreamOut[]> {
+    if (depth > maxDepth || visited.has(pageUrl)) return [];
+    visited.add(pageUrl);
+    try {
+      const response = await axios.get(pageUrl, {
+        headers: { ...headers, Referer: parentUrl || HUB + "/" },
+        signal,
+        timeout: depth === 0 ? 6500 : 4500,
+        maxRedirects: 4,
+        validateStatus: (status: number) => status < 500,
+      });
+      const body = typeof response.data === "string" ? response.data : JSON.stringify(response.data || {});
+      const media = extractDirectMedia(body, pageUrl);
+      if (media.length) {
+        let referer = HUB + "/";
+        try { referer = new URL(pageUrl).origin + "/"; } catch {}
+        return media.map((item) => ({
+          server: server.name,
+          link: item.url,
+          type: item.type,
+          headers: { "User-Agent": MOBILE_UA, Referer: referer },
+        }));
+      }
+
+      // Follow nested player frames and server links; the iframe URL itself is not the media URL.
+      const candidates: string[] = [];
+      const re = /<(?:iframe|source|a|button)\b[^>]*?(?:\b(?:src|data-src|data-link|href|data-url)\s*=\s*["']([^"']+)["'])[^>]*>/gi;
+      let match: RegExpExecArray | null;
+      while ((match = re.exec(body)) !== null) {
+        let raw = String(match[1] || "").replace(/&amp;/g, "&").trim();
+        if (!raw || /^(javascript:|mailto:|#|blob:|data:)/i.test(raw)) continue;
+        try { raw = new URL(raw, pageUrl).toString(); } catch { continue; }
+        if (!/^https?:\/\//i.test(raw) || visited.has(raw) || candidates.indexOf(raw) >= 0) continue;
+        candidates.push(raw);
+      }
+      for (const candidate of candidates.slice(0, 8)) {
+        const found = await inspect(candidate, pageUrl, depth + 1);
+        if (found.length) return found;
+      }
+    } catch (error: any) {
+      console.warn("[cineverse] mirror " + server.name + " depth " + depth + " failed: " + (error?.message || error));
     }
-  } catch (error: any) { console.warn("[cineverse] mirror " + server.name + " failed: " + (error?.message || error)); }
-  return [{ server: server.name + " (embed)", link: url, type: "iframe" }];
+    return [];
+  }
+
+  const resolved = await inspect(startUrl, HUB + "/", 0);
+  if (resolved.length) return resolved;
+  return [{ server: server.name + " (embed)", link: startUrl, type: "iframe" }];
 }
 
 export async function cineverseExtractor(
