@@ -242,15 +242,19 @@ async function resolveModernMirror(server: ServerItem, axios: any, headers: Reco
 
       // Follow nested player frames and server links; the iframe URL itself is not the media URL.
       const candidates: string[] = [];
-      const re = /<(?:iframe|source|a|button)\b[^>]*?(?:\b(?:src|data-src|data-link|href|data-url)\s*=\s*["']([^"']+)["'])[^>]*>/gi;
-      let match: RegExpExecArray | null;
-      while ((match = re.exec(body)) !== null) {
-        let raw = String(match[1] || "").replace(/&amp;/g, "&").trim();
-        if (!raw || /^(javascript:|mailto:|#|blob:|data:)/i.test(raw)) continue;
-        try { raw = new URL(raw, pageUrl).toString(); } catch { continue; }
-        if (!/^https?:\/\//i.test(raw) || visited.has(raw) || candidates.indexOf(raw) >= 0) continue;
+      const addCandidate = (value: string) => {
+        let raw = String(value || "").replace(/&amp;/g, "&").replace(/\\\//g, "/").trim();
+        if (!raw || /^(javascript:|mailto:|#|blob:|data:)/i.test(raw)) return;
+        try { raw = new URL(raw, pageUrl).toString(); } catch { return; }
+        if (!/^https?:\/\//i.test(raw) || visited.has(raw) || candidates.indexOf(raw) >= 0) return;
         candidates.push(raw);
-      }
+      };
+      // GD links can be embedded in inline JS/JSON rather than iframe tags.
+      const gdRe = /https?:\\?\/\\?\/streams\.iqsmartgames\.com\\?\/embed\\?\/[^"'\\s<>\\]+/gi;
+      let match: RegExpExecArray | null;
+      while ((match = gdRe.exec(body)) !== null) addCandidate(match[0]);
+      const re = /<(?:iframe|source|a|button|div)\b[^>]*?(?:\b(?:src|data-src|data-link|href|data-url)\s*=\s*["']([^"']+)["'])[^>]*>/gi;
+      while ((match = re.exec(body)) !== null) addCandidate(match[1]);
       for (const candidate of candidates.slice(0, 8)) {
         // GD / IQSmart embeds require their dedicated API resolver; a generic iframe walk
         // only returns another embed URL and never reaches the actual HLS manifest.
