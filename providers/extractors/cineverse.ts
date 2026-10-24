@@ -97,19 +97,36 @@ function extractSubtitles(html: string, pageUrl: string): NonNullable<Stream["su
   const decoded = deEscape(html).replace(/&amp;/g, "&").replace(/\\u0026/g, "&");
   const out: NonNullable<Stream["subtitles"]> = [];
   const seen = new Set<string>();
-  const re = /<track\b([^>]+)>/gi;
-  let m: RegExpExecArray | null;
-  while ((m = re.exec(decoded)) !== null) {
-    const attrs = m[1];
-    const raw = attrs.match(/\bsrc\s*=\s*["']([^"']+)["']/i)?.[1];
-    if (!raw) continue;
-    let uri = ""; try { uri = new URL(raw, pageUrl).toString(); } catch { continue; }
-    if (!/^https?:\/\//i.test(uri) || seen.has(uri)) continue;
-    const lang = attrs.match(/\bsrclang\s*=\s*["']([^"']+)["']/i)?.[1] || "und";
-    const title = attrs.match(/\blabel\s*=\s*["']([^"']+)["']/i)?.[1] || lang;
+  const add = (raw: string, title: string, language: string) => {
+    let uri = String(raw || "").trim().replace(/\\\//g, "/");
+    if (!uri || /^(data:|blob:|javascript:)/i.test(uri)) return;
+    try { uri = new URL(uri, pageUrl).toString(); } catch { return; }
+    if (!/^https?:\/\//i.test(uri) || seen.has(uri)) return;
     const ext = (uri.split(/[?#]/)[0].split(".").pop() || "").toLowerCase();
+    if (!["vtt", "srt", "ttml", "xml"].includes(ext)) return;
+    const lang = language || "und";
     const type = ext === "srt" ? "application/x-subrip" : ext === "ttml" || ext === "xml" ? "application/ttml+xml" : "text/vtt";
-    out.push({ title, language: lang, type, uri }); seen.add(uri);
+    out.push({ title: title || lang, language: lang, type, uri });
+    seen.add(uri);
+  };
+  let m: RegExpExecArray | null;
+  const trackRe = /<track\b([^>]+)>/gi;
+  while ((m = trackRe.exec(decoded)) !== null) {
+    const attrs = m[1];
+    add(attrs.match(/\bsrc\s*=\s*["']([^"']+)["']/i)?.[1] || "",
+      attrs.match(/\blabel\s*=\s*["']([^"']+)["']/i)?.[1] || "",
+      attrs.match(/\bsrclang\s*=\s*["']([^"']+)["']/i)?.[1] || "");
+  }
+  // Some players store captions in JSON/JS config instead of HTML <track> tags.
+  const urlRe = /["']([^"'\s<>]+?\.(?:vtt|srt|ttml|xml)(?:\?[^"'\s<>]*)?)["']/gi;
+  while ((m = urlRe.exec(decoded)) !== null) {
+    const before = decoded.slice(Math.max(0, m.index - 180), m.index);
+    const after = decoded.slice(m.index, Math.min(decoded.length, m.index + 180));
+    const context = before + after;
+    if (!/(subtitle|captions?|tracks?|srclang|label|texttrack)/i.test(context)) continue;
+    const language = context.match(/(?:srclang|language|lang)\s*["']?\s*[:=]\s*["']?([a-z]{2,3}(?:-[a-z]{2})?)/i)?.[1] || "";
+    const title = context.match(/(?:label|title)\s*["']?\s*[:=]\s*["']([^"']+)/i)?.[1] || "";
+    add(m[1], title, language);
   }
   return out;
 }
