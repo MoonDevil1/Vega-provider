@@ -448,15 +448,15 @@ async function dispatchMirror(
 function extractSubtitleTracks(html: string, pageUrl: string): NonNullable<Stream["subtitles"]> {
   const out: NonNullable<Stream["subtitles"]> = [];
   const seen = new Set<string>();
-  const re = /<track\\b([^>]+)>/gi;
+  const re = /<track\b([^>]+)>/gi;
   let m: RegExpExecArray | null;
   while ((m = re.exec(deEscape(html).replace(/&amp;/g, "&"))) !== null) {
-    const attrs = m[1], raw = attrs.match(/\\bsrc\\s*=\\s*["']([^"']+)["']/i)?.[1];
+    const attrs = m[1], raw = attrs.match(/\bsrc\s*=\s*["']([^"']+)["']/i)?.[1];
     if (!raw) continue;
     let uri = ""; try { uri = new URL(raw, pageUrl).toString(); } catch { continue; }
-    if (!/^https?:\\/\\//i.test(uri) || seen.has(uri)) continue;
-    const language = attrs.match(/\\bsrclang\\s*=\\s*["']([^"']+)["']/i)?.[1] || "und";
-    const title = attrs.match(/\\blabel\\s*=\\s*["']([^"']+)["']/i)?.[1] || language;
+    if (!/^https?:\/\//i.test(uri) || seen.has(uri)) continue;
+    const language = attrs.match(/\bsrclang\s*=\s*["']([^"']+)["']/i)?.[1] || "und";
+    const title = attrs.match(/\blabel\s*=\s*["']([^"']+)["']/i)?.[1] || language;
     const ext = (uri.split(/[?#]/)[0].split(".").pop() || "").toLowerCase();
     const type = ext === "srt" ? "application/x-subrip" : ext === "ttml" || ext === "xml" ? "application/ttml+xml" : "text/vtt";
     out.push({ title, language, type, uri }); seen.add(uri);
