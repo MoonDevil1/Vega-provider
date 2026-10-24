@@ -30,3 +30,18 @@ npm test
 - The provider does not replace Vega's player.
 - A subtitle track is shown only when its URL and language/label can be read from the source player configuration or markup.
 - This implementation does not bypass DRM or authentication.
+
+
+## JioTV Go (v1.0.0)
+
+This provider connects Vega to a **JioTV Go server that you run and authenticate yourself**. It does not host channels or include Jio credentials.
+
+1. Install and run [JioTV Go](https://github.com/JioTV-Go/jiotv_go) on a device you control.
+2. Complete its Jio login/OTP flow yourself.
+3. In Vega, open **JioTV Go** provider settings and enter the server URL (for example, `http://192.168.1.10:5001` when the server is reachable on your home network).
+4. Browse or search channels, then play a channel through Vega's existing player.
+
+The provider reads the server's `/channels` endpoint and requests HLS playback through `/live/:channel_id`. You must make the server reachable from the device running Vega. The default `127.0.0.1` address works only if JioTV Go runs on the same device.
+
+**Compatibility limits:** this provider only returns HLS streams when the configured JioTV Go server exposes a readable HLS playlist. Channels requiring separate subscriptions need the appropriate subscription on your account. Widevine/DRM DASH channels are not decrypted or bypassed, and may not play in Vega's current player. Channel availability and quality depend on JioTV Go, your account, region, network and upstream service.
+
