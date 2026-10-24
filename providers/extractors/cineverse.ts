@@ -82,12 +82,14 @@ function extractM3u8(html: string): string | null {
   const preferred = /["']([^"'\s<>]*master\.m3u8[^"'\s<>]*)["']/gi;
   let m: RegExpExecArray | null;
   while ((m = preferred.exec(decoded)) !== null) add(m[1]);
-  const relay = /["']((?:\/|https?:\/\/)[^"'\s<>]*stream_proxy\.php\?url=[^"'\s<>]+)["']/gi;
-  while ((m = relay.exec(decoded)) !== null) add(m[1]);
+  // Prefer an actual playlist URL before the proxy relay. A relay may expose
+  // only one rendition, while the master playlist lets mpv enumerate quality.
   const direct = /(?:var\s+directSrc\s*=\s*)?["'](https?:\/\/[^"'\s\\<>]+\.m3u8[^"'\s\\<>]*)["']/gi;
   while ((m = direct.exec(decoded)) !== null) add(m[1]);
   const bare = /https?:\/\/[^"'\s\\<>]+\.m3u8[^"'\s\\<>]*/gi;
   while ((m = bare.exec(decoded)) !== null) add(m[0]);
+  const relay = /["']((?:\/|https?:\/\/)[^"'\s<>]*stream_proxy\.php\?url=[^"'\s<>]+)["']/gi;
+  while ((m = relay.exec(decoded)) !== null) add(m[1]);
   const relative = /["'](\/hls\/[^"'\s]+master\.m3u8[^"'\s]*)["']/gi;
   while ((m = relative.exec(decoded)) !== null) add(m[1]);
   return candidates[0] || null;
@@ -154,7 +156,7 @@ async function resolveProxyPage(
   axios: any,
   headers: Record<string, string>,
   signal?: AbortSignal,
-): Promise<{ url: string } | null> {
+): Promise<{ url: string; subtitles?: NonNullable<Stream["subtitles"]> } | null> {
   const proxyUrl =
     HUB + "/proxy.php?p=" + encodeURIComponent(server.platform) +
     "&c=" + encodeURIComponent(server.code) +
@@ -368,7 +370,8 @@ export async function cineverseExtractor(
       const result = results[i];
       if (result.status !== "fulfilled" || !result.value?.url || seen.has(result.value.url)) continue;
       seen.add(result.value.url);
-      streamLinks.push({ server: "Cineverse " + servers[i].name, link: result.value.url, type: "m3u8", headers: playbackHeaders, ...(subtitles.length ? { subtitles } : {}) });
+      const mirrorSubtitles = result.value.subtitles?.length ? result.value.subtitles : subtitles;
+      streamLinks.push({ server: "Cineverse " + servers[i].name, link: result.value.url, type: "m3u8", headers: playbackHeaders, ...(mirrorSubtitles.length ? { subtitles: mirrorSubtitles } : {}) });
     }
   } else {
     const results = await Promise.allSettled(servers.map((server) => resolveModernMirror(server, axios, headers, signal, _cheerio, _providerContext)));
