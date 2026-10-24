@@ -445,6 +445,25 @@ async function dispatchMirror(
 /*  IQST EXTRACTOR                                                     */
 /* ================================================================== */
 
+function extractSubtitleTracks(html: string, pageUrl: string): NonNullable<Stream["subtitles"]> {
+  const out: NonNullable<Stream["subtitles"]> = [];
+  const seen = new Set<string>();
+  const re = /<track\\b([^>]+)>/gi;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(deEscape(html).replace(/&amp;/g, "&"))) !== null) {
+    const attrs = m[1], raw = attrs.match(/\\bsrc\\s*=\\s*["']([^"']+)["']/i)?.[1];
+    if (!raw) continue;
+    let uri = ""; try { uri = new URL(raw, pageUrl).toString(); } catch { continue; }
+    if (!/^https?:\\/\\//i.test(uri) || seen.has(uri)) continue;
+    const language = attrs.match(/\\bsrclang\\s*=\\s*["']([^"']+)["']/i)?.[1] || "und";
+    const title = attrs.match(/\\blabel\\s*=\\s*["']([^"']+)["']/i)?.[1] || language;
+    const ext = (uri.split(/[?#]/)[0].split(".").pop() || "").toLowerCase();
+    const type = ext === "srt" ? "application/x-subrip" : ext === "ttml" || ext === "xml" ? "application/ttml+xml" : "text/vtt";
+    out.push({ title, language, type, uri }); seen.add(uri);
+  }
+  return out;
+}
+
 /* Resolve publicly exposed, non-DRM media URLs from newer embed pages. */
 async function resolveEmbedMedia(
   pageUrl: string, axios: any, headers: Record<string, string>,
@@ -468,6 +487,7 @@ async function resolveEmbedMedia(
     .replace(/\\u0026/g, "&").replace(/\\u003d/g, "=");
   const mediaRe = /https?:\/\/[^"'\s<>\\]+?\.(?:m3u8|mp4|m4v)(?:\?[^"'\s<>\\]*)?/gi;
   const found: Stream[] = [];
+  const subtitles = extractSubtitleTracks(html, pageUrl);
   const mediaSeen: Record<string, boolean> = {};
   let match: RegExpExecArray | null;
   while ((match = mediaRe.exec(decoded)) !== null) {
@@ -475,7 +495,7 @@ async function resolveEmbedMedia(
     if (mediaSeen[mediaUrl]) continue;
     mediaSeen[mediaUrl] = true;
     found.push({ server: "IQSmart direct", link: mediaUrl,
-      type: /\\.(mp4|m4v)(?:[?#]|$)/i.test(mediaUrl) ? "mp4" : "m3u8" });
+      type: /\\.(mp4|m4v)(?:[?#]|$)/i.test(mediaUrl) ? "mp4" : "m3u8", ...(subtitles.length ? { subtitles } : {}) });
   }
   if (found.length) return found;
   if (depth >= 3) return [];
