@@ -190,7 +190,7 @@ function parseWatchConfigServers(html: string): ServerEntry[] {
     name: String(item?.name || item?.server || item?.id || "Server").trim(),
     url: String(item?.url || item?.link || "").trim(),
     index: Number.isFinite(Number(item?.index)) ? Number(item.index) : index,
-  })).filter((item: ServerEntry) => /^https?:\\/\\//i.test(item.url))
+  })).filter((item: ServerEntry) => /^https?:\/\//i.test(item.url))
     .filter((item: ServerEntry, index: number, all: ServerEntry[]) =>
       all.findIndex((other) => other.url === item.url) === index);
 }
