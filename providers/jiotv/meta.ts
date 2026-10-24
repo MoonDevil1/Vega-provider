@@ -19,13 +19,13 @@ export const getMeta = async function ({
       timeout: 12000,
     });
     const payload: any = response.data;
-    const channels: any[] = Array.isArray(payload) ? payload : (payload?.channels || payload?.data || payload?.results || []);
+    const channels: any[] = Array.isArray(payload) ? payload : (payload?.result || payload?.channels || payload?.data || payload?.results || []);
     const channel = channels.find((c) => String(c.id ?? c.channel_id ?? c.channelId ?? c.channelID ?? "") === id);
     if (channel) {
       title = String(channel.name ?? channel.channel_name ?? channel.channelName ?? channel.title ?? title);
-      image = String(channel.logo ?? channel.logo_url ?? channel.image ?? channel.icon ?? "");
-      const language = String(channel.language ?? channel.lang ?? "");
-      const genre = String(channel.genre ?? channel.category ?? channel.group ?? "");
+      image = String(channel.logo ?? channel.logo_url ?? channel.logoUrl ?? channel.image ?? channel.icon ?? "");
+      const language = String(channel.language ?? channel.channelLanguageId ?? channel.language_id ?? channel.lang ?? "");
+      const genre = String(channel.genre ?? channel.channelCategoryId ?? channel.category_id ?? channel.category ?? channel.group ?? "");
       synopsis = [language, genre].filter(Boolean).join(" · ") || synopsis;
     }
   } catch (error) {
