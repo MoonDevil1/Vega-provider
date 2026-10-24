@@ -45,3 +45,8 @@ The provider reads the server's `/channels` endpoint and requests HLS playback t
 
 **Compatibility limits:** this provider only returns HLS streams when the configured JioTV Go server exposes a readable HLS playlist. Channels requiring separate subscriptions need the appropriate subscription on your account. Widevine/DRM DASH channels are not decrypted or bypassed, and may not play in Vega's current player. Channel availability and quality depend on JioTV Go, your account, region, network and upstream service.
 
+
+
+## Test JioTV Go in Codespaces
+
+Open [JioTV Go testing instructions](docs/JIOTV-GO-TESTING.md) to install and run the upstream JioTV Go server in a GitHub Codespace. From the Codespaces terminal, run `bash scripts/run-jiotv-go-codespace.sh`. Login and OTP are completed by you in that terminal; never store credentials or tokens in this repository.
