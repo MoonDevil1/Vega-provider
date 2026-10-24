@@ -254,15 +254,15 @@ async function resolveModernMirror(server: ServerItem, axios: any, headers: Reco
       for (const candidate of candidates.slice(0, 8)) {
         // GD / IQSmart embeds require their dedicated API resolver; a generic iframe walk
         // only returns another embed URL and never reaches the actual HLS manifest.
-        if (/streams\\.iqsmartgames\\.com\\/embed\\//i.test(candidate)) {
+        if (/streams\.iqsmartgames\.com\/embed\//i.test(candidate)) {
           try {
             const gdStreams = await iqstExtractor(candidate, signal as AbortSignal, axios, cheerio, {
               ...headers,
               Referer: pageUrl,
             }, providerContext);
             const playable = (gdStreams || []).filter((item: any) =>
-              item && /^https?:\\/\\//i.test(String(item.link || "")) &&
-              /\\.(m3u8|mp4|m4v)(?:[?#]|$)/i.test(String(item.link || "")));
+              item && /^https?:\/\//i.test(String(item.link || "")) &&
+              /\.(m3u8|mp4|m4v)(?:[?#]|$)/i.test(String(item.link || "")));
             if (playable.length) return playable.map((item: any) => ({
               ...item,
               server: server.name + " / GD mirror" + (item.server ? " / " + item.server : ""),
