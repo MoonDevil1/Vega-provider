@@ -204,6 +204,40 @@ export async function getPosts({
       });
     }
 
+    if (posts.length === 0) {
+      $("a[href*='/movie/'], a[href*='/series/']").each((_i: number, node: any) => {
+        const anchor = $(node);
+        const rawHref = String(anchor.attr("href") || "");
+        const link = resolveUrl(rawHref, baseUrl);
+        if (!rawHref || !link || !/\/(movie|series)\//i.test(new URL(link).pathname)) return;
+        if (posts.some((p) => normaliseContentLink(p.link) === normaliseContentLink(link))) return;
+        const card = anchor.closest("article, li, .item, .card, .poster, div");
+        const img = anchor.find("img").first().length ? anchor.find("img").first() : card.find("img").first();
+        const title = normaliseTitle(anchor.attr("title") || anchor.text() || img.attr("alt") || "");
+        if (title) posts.push({ title, link, image: resolveUrl(getPosterSrc(img), baseUrl) });
+      });
+    }
+    if (posts.length === 0) {
+      const fallbackPath = route === "series" ? "/series" : route === "movies" ? "/movies" : route === "trending" ? "/trending" : "/" + route;
+      const fallback = new URL(baseUrl + fallbackPath);
+      fallback.searchParams.set("page", String(Math.max(1, page)));
+      try {
+        const retry = await axios.get(fallback.href, { headers: { ...HEADERS, Referer: baseUrl }, signal, timeout: 12000, maxRedirects: 5 });
+        const $fallback = cheerio.load(retry.data);
+        $fallback("a[href*='/movie/'], a[href*='/series/']").each((_i: number, node: any) => {
+          const anchor = $fallback(node);
+          const rawHref = String(anchor.attr("href") || "");
+          const link = resolveUrl(rawHref, baseUrl);
+          if (!rawHref || !link || !/\/(movie|series)\//i.test(new URL(link).pathname)) return;
+          if (posts.some((p) => normaliseContentLink(p.link) === normaliseContentLink(link))) return;
+          const card = anchor.closest("article, li, .item, .card, .poster, div");
+          const img = anchor.find("img").first().length ? anchor.find("img").first() : card.find("img").first();
+          const title = normaliseTitle(anchor.attr("title") || anchor.text() || img.attr("alt") || "");
+          if (title) posts.push({ title, link, image: resolveUrl(getPosterSrc(img), baseUrl) });
+        });
+      } catch (error: any) { console.warn("[MultiMovies] listing fallback failed:", error?.message || error); }
+    }
+
     console.log(`[MultiMovies] Found ${posts.length} posts for ${route}`);
     return posts.slice(0, 100);
   } catch (error) {
@@ -296,6 +330,27 @@ export async function getSearchPosts({
         const image = resolveUrl(getPosterSrc(img), baseUrl);
         posts.push({ title, link, image });
       });
+    }
+
+    if (posts.length === 0) {
+      const fallback = new URL(baseUrl + "/search");
+      fallback.searchParams.set("q", String(searchQuery || "").trim());
+      fallback.searchParams.set("page", String(Math.max(1, page)));
+      try {
+        const retry = await axios.get(fallback.href, { headers: { ...HEADERS, Referer: baseUrl }, signal, timeout: 12000, maxRedirects: 5 });
+        const $fallback = cheerio.load(retry.data);
+        $fallback("article, .result-item, .item, a[href*='/movie/'], a[href*='/series/']").each((_i: number, node: any) => {
+          const card = $fallback(node);
+          const anchor = card.is("a") ? card : card.find("a[href*='/movie/'], a[href*='/series/']").first();
+          const rawHref = String(anchor.attr("href") || "");
+          const link = resolveUrl(rawHref, baseUrl);
+          if (!rawHref || !link || !/\/(movie|series)\//i.test(new URL(link).pathname)) return;
+          if (posts.some((p) => normaliseContentLink(p.link) === normaliseContentLink(link))) return;
+          const img = anchor.find("img").first().length ? anchor.find("img").first() : card.find("img").first();
+          const title = normaliseTitle(anchor.attr("title") || card.find("h1, h2, h3, .title").first().text() || anchor.text() || img.attr("alt") || "");
+          if (title) posts.push({ title, link, image: resolveUrl(getPosterSrc(img), baseUrl) });
+        });
+      } catch (error: any) { console.warn("[MultiMovies] /search fallback failed:", error?.message || error); }
     }
 
     console.log(
