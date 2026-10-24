@@ -8,6 +8,11 @@ on:
 permissions:
   contents: write
 
+# Avoid concurrent pushes when several provider files are updated in quick succession.
+concurrency:
+  group: vega-provider-build-main
+  cancel-in-progress: false
+
 jobs:
   build:
     runs-on: ubuntu-latest
