@@ -479,7 +479,7 @@ async function resolveEmbedMedia(
   }
   if (found.length) return found;
   if (depth >= 3) return [];
-  const frameRe = /<(?:iframe|source)\\b[^>]*\\b(?:src|data-src|data-link)\\s*=\\s*["']([^"']+)["']/gi;
+  const frameRe = /<(?:iframe|source|a)\b[^>]*\b(?:src|data-src|data-link)\s*=\s*["']([^"']+)["']/gi;
   const frames: string[] = [];
   while ((match = frameRe.exec(html)) !== null) {
     try {
