@@ -435,7 +435,7 @@ async function resolvePublicEmbed(
     if (media.length) return media;
   }
   if (depth < 2) {
-    const iframeRe = /<(?:iframe|source)\b[^>]*\b(?:src|data-src)\s*=\s*["']([^"']+)["']/gi;
+    const iframeRe = /<(?:iframe|source|a)\b[^>]*\b(?:src|data-src|data-link)\s*=\s*["']([^"']+)["']/gi;
     const nested: string[] = [];
     while ((match = iframeRe.exec(html)) !== null) {
       try {
