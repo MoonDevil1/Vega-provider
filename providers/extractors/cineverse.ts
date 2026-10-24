@@ -386,6 +386,12 @@ export async function cineverseExtractor(
   console.log(
     "[cineverse] " + streamLinks.length + " streams in " + (Date.now() - t0) + "ms",
   );
+  // Carry subtitle tracks found on the outer player page to resolved mirror streams.
+  if (subtitles.length) {
+    for (const item of streamLinks) {
+      if (!item.subtitles || item.subtitles.length === 0) item.subtitles = subtitles;
+    }
+  }
   return streamLinks as Stream[];
 }
 
