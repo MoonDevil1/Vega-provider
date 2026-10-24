@@ -97,16 +97,16 @@ function extractSubtitles(html: string, pageUrl: string): NonNullable<Stream["su
   const decoded = deEscape(html).replace(/&amp;/g, "&").replace(/\\u0026/g, "&");
   const out: NonNullable<Stream["subtitles"]> = [];
   const seen = new Set<string>();
-  const re = /<track\\b([^>]+)>/gi;
+  const re = /<track\b([^>]+)>/gi;
   let m: RegExpExecArray | null;
   while ((m = re.exec(decoded)) !== null) {
     const attrs = m[1];
-    const raw = attrs.match(/\\bsrc\\s*=\\s*["']([^"']+)["']/i)?.[1];
+    const raw = attrs.match(/\bsrc\s*=\s*["']([^"']+)["']/i)?.[1];
     if (!raw) continue;
     let uri = ""; try { uri = new URL(raw, pageUrl).toString(); } catch { continue; }
-    if (!/^https?:\\/\\//i.test(uri) || seen.has(uri)) continue;
-    const lang = attrs.match(/\\bsrclang\\s*=\\s*["']([^"']+)["']/i)?.[1] || "und";
-    const title = attrs.match(/\\blabel\\s*=\\s*["']([^"']+)["']/i)?.[1] || lang;
+    if (!/^https?:\/\//i.test(uri) || seen.has(uri)) continue;
+    const lang = attrs.match(/\bsrclang\s*=\s*["']([^"']+)["']/i)?.[1] || "und";
+    const title = attrs.match(/\blabel\s*=\s*["']([^"']+)["']/i)?.[1] || lang;
     const ext = (uri.split(/[?#]/)[0].split(".").pop() || "").toLowerCase();
     const type = ext === "srt" ? "application/x-subrip" : ext === "ttml" || ext === "xml" ? "application/ttml+xml" : "text/vtt";
     out.push({ title, language: lang, type, uri }); seen.add(uri);
