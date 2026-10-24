@@ -500,13 +500,57 @@ export async function getStream({
     return [];
   }
 
-  // 2) Parse chips
-  const servers = parseServers(html, cheerio);
-  console.log("[stream] " + servers.length + " chip(s) parsed");
+  // 2) Parse the server configuration. Some title pages only link to a
+  // dedicated /watch/movie/<id> or /watch/tv/<id> page where watchConfig lives.
+  let pageUrl = link;
+  let servers = parseServers(html, cheerio);
+  if (servers.length === 0) {
+    const candidates: string[] = [];
+    try {
+      const $ = cheerio.load(html);
+      $("[href], [data-href], [data-url], iframe[src]").each((_i: number, node: any) => {
+        const el = $(node);
+        const raw = String(el.attr("href") || el.attr("data-href") || el.attr("data-url") || el.attr("src") || "").trim();
+        if (!raw) return;
+        try {
+          const absolute = new URL(raw, link).toString();
+          if (/\/watch\/(?:movie|tv|series)\//i.test(absolute) && !candidates.includes(absolute)) candidates.push(absolute);
+        } catch {}
+      });
+    } catch {}
+    const rawWatchPaths = html.match(/(?:https?:\\?\/\\?\/[^"'\\s<>]+)?\/watch\/(?:movie|tv|series)\/[^"'\\s<>]+/gi) || [];
+    for (const raw of rawWatchPaths) {
+      try {
+        const candidate = new URL(raw.replace(/\\\//g, "/"), link).toString();
+        if (!candidates.includes(candidate)) candidates.push(candidate);
+      } catch {}
+    }
+    for (const candidate of candidates.slice(0, 3)) {
+      try {
+        const response = await axios.get(candidate, {
+          headers: { ...BASE_HEADERS, Referer: link },
+          signal,
+          timeout: 10000,
+          maxRedirects: 4,
+        });
+        const candidateHtml = String(response.data || "");
+        const parsed = parseServers(candidateHtml, cheerio);
+        if (parsed.length) {
+          pageUrl = candidate;
+          html = candidateHtml;
+          servers = parsed;
+          break;
+        }
+      } catch (error: any) {
+        console.warn("[stream] watch page lookup failed:", error?.message || error);
+      }
+    }
+  }
+  console.log("[stream] " + servers.length + " server(s) parsed");
 
   if (servers.length === 0) return [];
 
-  const mediaType = detectMediaType(type, link, html);
+  const mediaType = detectMediaType(type, pageUrl, html);
   console.log("[stream] media type=" + mediaType + "  starting parallel run");
 
   // 3) Fire ALL servers in parallel with per-server timeouts
