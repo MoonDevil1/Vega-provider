@@ -172,6 +172,64 @@ async function resolveProxyPage(
 /* ================================================================== */
 /*  CINEVERSE EXTRACTOR                                                */
 /* ================================================================== */
+function parseModernServers(html: string, cheerio: any): ServerItem[] {
+  const out: ServerItem[] = []; const seen = new Set<string>();
+  try { const $ = cheerio.load(html); $(".srv-item[data-url]").each((_i: number, node: any) => {
+    const el = $(node); const platform = String(el.attr("data-platform") || "").trim();
+    const code = String(el.attr("data-code") || "").trim(); const raw = String(el.attr("data-url") || "").trim();
+    const name = String(el.attr("data-pname") || el.text() || platform || "Mirror").replace(/\s+/g, " ").trim();
+    if (!raw) return; let url = raw;
+    if (!/^https?:\/\//i.test(raw)) {
+      if (raw.startsWith("/")) url = HUB + raw;
+      else if (platform && code) url = HUB + "/proxy.php?p=" + encodeURIComponent(platform) + "&c=" + encodeURIComponent(code) + "&title=&site_ref=" + encodeURIComponent(REFERER_HUB) + "&noredirect=1";
+      else return;
+    }
+    if (seen.has(url)) return; seen.add(url);
+    out.push({ platform: platform || name.toLowerCase().replace(/\W+/g, ""), name, code: code || raw, url });
+  }); } catch {}
+  return out;
+}
+function extractDirectMedia(html: string, pageUrl: string): { url: string; type: string }[] {
+  const decoded = deEscape(html).replace(/\\u0026/g, "&").replace(/\\u003d/g, "=").replace(/\\\//g, "/").replace(/&amp;/g, "&");
+  const out: { url: string; type: string }[] = []; const seen = new Set<string>();
+  const add = (raw: string) => {
+    let url = String(raw || "").trim().replace(/^['"]|['"]$/g, ""); if (!url || /^(blob:|data:|javascript:)/i.test(url)) return;
+    try { url = new URL(url, pageUrl).toString(); } catch { return; }
+    if (!/^https?:\/\//i.test(url) || seen.has(url)) return;
+    const path = url.split(/[?#]/)[0].toLowerCase();
+    const type = /\.m3u8$/.test(path) ? "m3u8" : /\.(mp4|m4v)$/.test(path) ? "mp4" : "";
+    if (type) { seen.add(url); out.push({ url, type }); }
+  };
+  const patterns = [
+    /(?:file|src|source|hls|streaming_url|m3u8_path|directSrc)\s*[:=]\s*["']([^"']+)["']/gi,
+    /["'](https?:\/\/[^"'\s<>]+?\.(?:m3u8|mp4|m4v)(?:\?[^"'\s<>]*)?)["']/gi,
+    /(?:https?:)?\/\/[^"'\s<>]+?\.(?:m3u8|mp4|m4v)(?:\?[^"'\s<>]*)?/gi,
+  ];
+  for (const re of patterns) { let m: RegExpExecArray | null; while ((m = re.exec(decoded)) !== null) add(m[1] || m[0]); }
+  return out;
+}
+async function resolveModernMirror(server: ServerItem, axios: any, headers: Record<string, string>, signal?: AbortSignal): Promise<StreamOut[]> {
+  const url = server.url || ""; if (!url) return [];
+  try {
+    const response = await axios.get(url, { headers: { ...headers, Referer: HUB + "/" }, signal, timeout: 6500, maxRedirects: 4, validateStatus: (status: number) => status < 500 });
+    const body = typeof response.data === "string" ? response.data : JSON.stringify(response.data || {});
+    const media = extractDirectMedia(body, url);
+    if (media.length) return media.map((item) => ({ server: server.name, link: item.url, type: item.type, headers: { "User-Agent": MOBILE_UA, Referer: new URL(url).origin + "/" } }));
+    const iframeRe = /<(?:iframe|source)\b[^>]*\b(?:src|data-src)\s*=\s*["']([^"']+)["']/gi;
+    let m: RegExpExecArray | null;
+    while ((m = iframeRe.exec(body)) !== null) {
+      try {
+        const nestedUrl = new URL(m[1].replace(/&amp;/g, "&"), url).toString();
+        const nestedResponse = await axios.get(nestedUrl, { headers: { ...headers, Referer: url }, signal, timeout: 4500, maxRedirects: 3 });
+        const nestedBody = typeof nestedResponse.data === "string" ? nestedResponse.data : JSON.stringify(nestedResponse.data || {});
+        const nestedMedia = extractDirectMedia(nestedBody, nestedUrl);
+        if (nestedMedia.length) return nestedMedia.map((item) => ({ server: server.name, link: item.url, type: item.type, headers: { "User-Agent": MOBILE_UA, Referer: new URL(nestedUrl).origin + "/" } }));
+      } catch {}
+    }
+  } catch (error: any) { console.warn("[cineverse] mirror " + server.name + " failed: " + (error?.message || error)); }
+  return [{ server: server.name + " (embed)", link: url, type: "iframe" }];
+}
+
 export async function cineverseExtractor(
   link: string,
   signal: AbortSignal,
@@ -202,46 +260,31 @@ export async function cineverseExtractor(
     return streamLinks;
   }
 
-  // 2) Parse switchServer(...)
-  const servers = parseServers(html);
-  console.log("[cineverse] servers=" + servers.length);
-
-  if (servers.length === 0) {
-    console.log("[cineverse] embed head: " + html.slice(0, 200).replace(/\s+/g, " "));
-    return [];
-  }
-
-  // 3) Fetch all proxy pages in parallel
-  const results = await Promise.allSettled(
-    servers.map(function (s) {
-      return resolveProxyPage(s, axios, headers, signal);
-    }),
-  );
-
-  // 4) Merge + dedupe by link (prevents React duplicate-key warnings)
-  const playbackHeaders = buildPlaybackHeaders();
-  const seenLinks = new Set<string>();
+  // Prefer modern .srv-item mirrors; retain legacy switchServer support.
+  const modernServers = parseModernServers(html, _cheerio);
+  const servers = modernServers.length ? modernServers : parseServers(html);
+  console.log("[cineverse] servers=" + servers.length + (modernServers.length ? " (modern)" : ""));
   let dropped = 0;
-
-  for (let i = 0; i < results.length; i++) {
-    const r = results[i];
-    if (r.status !== "fulfilled" || !r.value) continue;
-
-    const url = r.value.url;
-    if (!url) continue;
-
-    if (seenLinks.has(url)) {
-      dropped++;
-      continue;
+  if (!servers.length) {
+    for (const item of extractDirectMedia(html, link)) streamLinks.push({ server: "Cineverse direct", link: item.url, type: item.type, headers: buildPlaybackHeaders() });
+    return streamLinks;
+  }
+  if (modernServers.length) {
+    const results = await Promise.allSettled(servers.map((server) => resolveModernMirror(server, axios, headers, signal)));
+    const seen = new Set<string>();
+    for (const result of results) {
+      if (result.status !== "fulfilled") continue;
+      for (const item of result.value) { if (!item.link || seen.has(item.link)) continue; seen.add(item.link); streamLinks.push(item); }
     }
-    seenLinks.add(url);
-
-    streamLinks.push({
-      server: "Cineverse " + servers[i].name,
-      link: url,
-      type: "m3u8",
-      headers: playbackHeaders,
-    });
+  } else {
+    const results = await Promise.allSettled(servers.map((server) => resolveProxyPage(server, axios, headers, signal)));
+    const seen = new Set<string>(); const playbackHeaders = buildPlaybackHeaders();
+    for (let i = 0; i < results.length; i++) {
+      const result = results[i];
+      if (result.status !== "fulfilled" || !result.value?.url || seen.has(result.value.url)) continue;
+      seen.add(result.value.url);
+      streamLinks.push({ server: "Cineverse " + servers[i].name, link: result.value.url, type: "m3u8", headers: playbackHeaders });
+    }
   }
 
   if (dropped > 0) {
