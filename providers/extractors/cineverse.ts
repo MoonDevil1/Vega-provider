@@ -195,8 +195,9 @@ async function resolveProxyPage(
     return null;
   }
 
-  console.log("[cineverse] " + server.platform + " -> " + m3u8);
-  return { url: m3u8 };
+  const subtitles = extractSubtitles(html, proxyUrl);
+  console.log("[cineverse] " + server.platform + " -> " + m3u8 + " (subtitles=" + subtitles.length + ")");
+  return { url: m3u8, ...(subtitles.length ? { subtitles } : {}) };
 }
 
 /* ================================================================== */
