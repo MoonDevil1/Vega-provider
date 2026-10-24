@@ -169,7 +169,7 @@ function extractAssignedObject(html: string, variable: string): any {
     const ch = html[i];
     if (quote) {
       if (escaped) escaped = false;
-      else if (ch === "\\\\") escaped = true;
+      else if (ch === "\\") escaped = true;
       else if (ch === quote) quote = "";
       continue;
     }
