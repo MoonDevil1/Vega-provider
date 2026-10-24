@@ -320,23 +320,20 @@ export async function cineverseExtractor(
     return streamLinks;
   }
 
-  // Prefer modern .srv-item mirrors; retain legacy switchServer support.
+  // Match the official Vega Multi flow first: switchServer -> proxy.php -> extractM3u8.
+  // Modern .srv-item entries still carry platform/code on current pages; prefer the
+  // hub's proxy resolver over returning the raw server embed URL.
+  const legacyServers = parseServers(html);
   const modernServers = parseModernServers(html, _cheerio);
-  const servers = modernServers.length ? modernServers : parseServers(html);
-  console.log("[cineverse] servers=" + servers.length + (modernServers.length ? " (modern)" : ""));
+  const servers = legacyServers.length ? legacyServers : modernServers;
+  const useProxyFlow = servers.length > 0 && servers.every((server) => !!server.platform && !!server.code);
+  console.log("[cineverse] servers=" + servers.length + (legacyServers.length ? " (switchServer)" : modernServers.length ? " (modern via proxy)" : ""));
   let dropped = 0;
   if (!servers.length) {
     for (const item of extractDirectMedia(html, link)) streamLinks.push({ server: "Cineverse direct", link: item.url, type: item.type, headers: buildPlaybackHeaders() });
     return streamLinks;
   }
-  if (modernServers.length) {
-    const results = await Promise.allSettled(servers.map((server) => resolveModernMirror(server, axios, headers, signal, _cheerio, _providerContext)));
-    const seen = new Set<string>();
-    for (const result of results) {
-      if (result.status !== "fulfilled") continue;
-      for (const item of result.value) { if (!item.link || seen.has(item.link)) continue; seen.add(item.link); streamLinks.push(item); }
-    }
-  } else {
+  if (useProxyFlow) {
     const results = await Promise.allSettled(servers.map((server) => resolveProxyPage(server, axios, headers, signal)));
     const seen = new Set<string>(); const playbackHeaders = buildPlaybackHeaders();
     for (let i = 0; i < results.length; i++) {
@@ -344,6 +341,13 @@ export async function cineverseExtractor(
       if (result.status !== "fulfilled" || !result.value?.url || seen.has(result.value.url)) continue;
       seen.add(result.value.url);
       streamLinks.push({ server: "Cineverse " + servers[i].name, link: result.value.url, type: "m3u8", headers: playbackHeaders });
+    }
+  } else {
+    const results = await Promise.allSettled(servers.map((server) => resolveModernMirror(server, axios, headers, signal, _cheerio, _providerContext)));
+    const seen = new Set<string>();
+    for (const result of results) {
+      if (result.status !== "fulfilled") continue;
+      for (const item of result.value) { if (!item.link || seen.has(item.link)) continue; seen.add(item.link); streamLinks.push(item); }
     }
   }
 
