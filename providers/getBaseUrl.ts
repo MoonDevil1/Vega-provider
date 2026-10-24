@@ -112,11 +112,11 @@ export const getBaseUrl = async (
       return discovered;
     }
     // Never fall back to the reference repository's potentially stale domain.
-    return fallbackUrl;
+    return "https://multimovies.wtf";
   }
 
   const urls = await fetchProviderUrls();
   const configured = normaliseSiteUrl(urls[providerValue]?.url || "");
   if (configured) return configured;
-  return providerValue === "multi" ? fallbackUrl : "";
+  return providerValue === "multi" ? "https://multimovies.wtf" : "";
 };
