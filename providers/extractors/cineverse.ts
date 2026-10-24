@@ -1,5 +1,6 @@
 // extractors/cineverse.ts
 import { Stream } from "../types";
+import { iqstExtractor } from "./iqst";
 
 /* ================================================================== */
 /*  Constants                                                          */
@@ -209,7 +210,7 @@ function extractDirectMedia(html: string, pageUrl: string): { url: string; type:
   for (const re of patterns) { let m: RegExpExecArray | null; while ((m = re.exec(decoded)) !== null) add(m[1] || m[0]); }
   return out;
 }
-async function resolveModernMirror(server: ServerItem, axios: any, headers: Record<string, string>, signal?: AbortSignal): Promise<StreamOut[]> {
+async function resolveModernMirror(server: ServerItem, axios: any, headers: Record<string, string>, signal?: AbortSignal, cheerio?: any, providerContext?: any): Promise<StreamOut[]> {
   const startUrl = server.url || "";
   if (!startUrl) return [];
   const visited = new Set<string>();
@@ -251,6 +252,26 @@ async function resolveModernMirror(server: ServerItem, axios: any, headers: Reco
         candidates.push(raw);
       }
       for (const candidate of candidates.slice(0, 8)) {
+        // GD / IQSmart embeds require their dedicated API resolver; a generic iframe walk
+        // only returns another embed URL and never reaches the actual HLS manifest.
+        if (/streams\\.iqsmartgames\\.com\\/embed\\//i.test(candidate)) {
+          try {
+            const gdStreams = await iqstExtractor(candidate, signal as AbortSignal, axios, cheerio, {
+              ...headers,
+              Referer: pageUrl,
+            }, providerContext);
+            const playable = (gdStreams || []).filter((item: any) =>
+              item && /^https?:\\/\\//i.test(String(item.link || "")) &&
+              /\\.(m3u8|mp4|m4v)(?:[?#]|$)/i.test(String(item.link || "")));
+            if (playable.length) return playable.map((item: any) => ({
+              ...item,
+              server: server.name + " / GD mirror" + (item.server ? " / " + item.server : ""),
+            }));
+          } catch (error: any) {
+            console.warn("[cineverse] GD mirror resolver failed: " + (error?.message || error));
+          }
+          continue;
+        }
         const found = await inspect(candidate, pageUrl, depth + 1);
         if (found.length) return found;
       }
@@ -305,7 +326,7 @@ export async function cineverseExtractor(
     return streamLinks;
   }
   if (modernServers.length) {
-    const results = await Promise.allSettled(servers.map((server) => resolveModernMirror(server, axios, headers, signal)));
+    const results = await Promise.allSettled(servers.map((server) => resolveModernMirror(server, axios, headers, signal, _cheerio, _providerContext)));
     const seen = new Set<string>();
     for (const result of results) {
       if (result.status !== "fulfilled") continue;
