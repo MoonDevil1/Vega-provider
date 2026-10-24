@@ -67,44 +67,53 @@ function deEscape(s: string): string {
 /*    /hls/.../master.m3u8                         -> HUB + path       */
 /* ================================================================== */
 function extractM3u8(html: string): string | null {
-  const decoded = deEscape(html);
-
-  // 1) var directSrc="https://...master.m3u8?token=..."
-  let m = decoded.match(/var\s+directSrc\s*=\s*["']([^"']+\.m3u8[^"']*)["']/i);
-  if (m && m[1] && /^https?:\/\//i.test(m[1])) {
-    return m[1].trim();
-  }
-
-  // 2) var src="/stream_proxy.php?url=...&ref=...&tok=..."
-  //    Return the relay — the hub handles CDN referer + token validation.
-  m = decoded.match(
-    /["']((?:\/|https?:\/\/)[^"'\s<>]*stream_proxy\.php\?url=[^"'\s<>]+)["']/i,
-  );
-  if (m && m[1]) {
-    let url = m[1].trim();
-    if (url.indexOf("http") !== 0) {
-      url = HUB + (url.indexOf("/") === 0 ? url : "/" + url);
-    }
-    if (!/[?&]seg=/.test(url)) {
-      url += "&seg=direct";
-    }
-    return url;
-  }
-
-  // 3) Any absolute .m3u8 URL
-  m = decoded.match(/https?:\/\/[^"'\s\\<>]+\.m3u8[^"'\s\\<>]*/i);
-  if (m) return m[0];
-
-  // 4) Bare relative /hls/.../master.m3u8
-  m = decoded.match(/["'](\/hls\/[^"'\s]+master\.m3u8[^"'\s]*)["']/i);
-  if (m && m[1]) return HUB + m[1];
-
-  return null;
+  const decoded = deEscape(html).replace(/\\u0026/g, "&").replace(/\\u003d/g, "=");
+  const candidates: string[] = [];
+  const add = (raw: string) => {
+    let value = String(raw || "").trim().replace(/&amp;/g, "&");
+    if (!value) return;
+    if (value.startsWith("/")) value = HUB + value;
+    if (!/^https?:\/\//i.test(value)) return;
+    if (!/\.m3u8(?:[?#]|$)/i.test(value) && !/stream_proxy\.php\?[^"'<>]*url=/i.test(value)) return;
+    if (/stream_proxy\.php/i.test(value) && !/[?&]seg=/.test(value)) value += "&seg=direct";
+    if (!candidates.includes(value)) candidates.push(value);
+  };
+  // Prefer a real master playlist so Vega can enumerate all resolutions.
+  const preferred = /["']([^"'\s<>]*master\.m3u8[^"'\s<>]*)["']/gi;
+  let m: RegExpExecArray | null;
+  while ((m = preferred.exec(decoded)) !== null) add(m[1]);
+  const relay = /["']((?:\/|https?:\/\/)[^"'\s<>]*stream_proxy\.php\?url=[^"'\s<>]+)["']/gi;
+  while ((m = relay.exec(decoded)) !== null) add(m[1]);
+  const direct = /(?:var\s+directSrc\s*=\s*)?["'](https?:\/\/[^"'\s\\<>]+\.m3u8[^"'\s\\<>]*)["']/gi;
+  while ((m = direct.exec(decoded)) !== null) add(m[1]);
+  const bare = /https?:\/\/[^"'\s\\<>]+\.m3u8[^"'\s\\<>]*/gi;
+  while ((m = bare.exec(decoded)) !== null) add(m[0]);
+  const relative = /["'](\/hls\/[^"'\s]+master\.m3u8[^"'\s]*)["']/gi;
+  while ((m = relative.exec(decoded)) !== null) add(m[1]);
+  return candidates[0] || null;
 }
 
-/* ================================================================== */
-/*  Parse switchServer(...) items                                      */
-/* ================================================================== */
+function extractSubtitles(html: string, pageUrl: string): NonNullable<Stream["subtitles"]> {
+  const decoded = deEscape(html).replace(/&amp;/g, "&").replace(/\\u0026/g, "&");
+  const out: NonNullable<Stream["subtitles"]> = [];
+  const seen = new Set<string>();
+  const re = /<track\\b([^>]+)>/gi;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(decoded)) !== null) {
+    const attrs = m[1];
+    const raw = attrs.match(/\\bsrc\\s*=\\s*["']([^"']+)["']/i)?.[1];
+    if (!raw) continue;
+    let uri = ""; try { uri = new URL(raw, pageUrl).toString(); } catch { continue; }
+    if (!/^https?:\\/\\//i.test(uri) || seen.has(uri)) continue;
+    const lang = attrs.match(/\\bsrclang\\s*=\\s*["']([^"']+)["']/i)?.[1] || "und";
+    const title = attrs.match(/\\blabel\\s*=\\s*["']([^"']+)["']/i)?.[1] || lang;
+    const ext = (uri.split(/[?#]/)[0].split(".").pop() || "").toLowerCase();
+    const type = ext === "srt" ? "application/x-subrip" : ext === "ttml" || ext === "xml" ? "application/ttml+xml" : "text/vtt";
+    out.push({ title, language: lang, type, uri }); seen.add(uri);
+  }
+  return out;
+}
+
 function parseServers(html: string): ServerItem[] {
   const out: ServerItem[] = [];
   const seen: Record<string, boolean> = {};
@@ -237,6 +246,7 @@ async function resolveModernMirror(server: ServerItem, axios: any, headers: Reco
           link: item.url,
           type: item.type,
           headers: { "User-Agent": MOBILE_UA, Referer: referer },
+          ...(extractSubtitles(body, pageUrl).length ? { subtitles: extractSubtitles(body, pageUrl) } : {}),
         }));
       }
 
@@ -323,6 +333,7 @@ export async function cineverseExtractor(
   // Match the official Vega Multi flow first: switchServer -> proxy.php -> extractM3u8.
   // Modern .srv-item entries still carry platform/code on current pages; prefer the
   // hub's proxy resolver over returning the raw server embed URL.
+  const subtitles = extractSubtitles(html, link);
   const legacyServers = parseServers(html);
   const modernServers = parseModernServers(html, _cheerio);
   const servers = legacyServers.length ? legacyServers : modernServers;
@@ -340,7 +351,7 @@ export async function cineverseExtractor(
       const result = results[i];
       if (result.status !== "fulfilled" || !result.value?.url || seen.has(result.value.url)) continue;
       seen.add(result.value.url);
-      streamLinks.push({ server: "Cineverse " + servers[i].name, link: result.value.url, type: "m3u8", headers: playbackHeaders });
+      streamLinks.push({ server: "Cineverse " + servers[i].name, link: result.value.url, type: "m3u8", headers: playbackHeaders, ...(subtitles.length ? { subtitles } : {}) });
     }
   } else {
     const results = await Promise.allSettled(servers.map((server) => resolveModernMirror(server, axios, headers, signal, _cheerio, _providerContext)));
