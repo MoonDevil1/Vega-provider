@@ -158,7 +158,46 @@ function parseServersRegex(html: string): ServerEntry[] {
   return out;
 }
 
+function extractAssignedObject(html: string, variable: string): any {
+  const startMatch = new RegExp("(?:const|let|var)\\s+" + variable + "\\s*=\\s*", "m").exec(html);
+  if (!startMatch) return null;
+  const start = startMatch.index + startMatch[0].length;
+  const open = html.indexOf("{", start);
+  if (open < 0) return null;
+  let depth = 0, quote = "", escaped = false;
+  for (let i = open; i < html.length; i++) {
+    const ch = html[i];
+    if (quote) {
+      if (escaped) escaped = false;
+      else if (ch === "\\\\") escaped = true;
+      else if (ch === quote) quote = "";
+      continue;
+    }
+    if (ch === '"' || ch === "'" || ch === "`") { quote = ch; continue; }
+    if (ch === "{") depth++;
+    else if (ch === "}" && --depth === 0) {
+      try { return JSON.parse(html.slice(open, i + 1)); } catch { return null; }
+    }
+  }
+  return null;
+}
+
+function parseWatchConfigServers(html: string): ServerEntry[] {
+  const config = extractAssignedObject(html, "watchConfig");
+  const raw = Array.isArray(config?.initialServers) ? config.initialServers : [];
+  return raw.map((item: any, index: number) => ({
+    id: String(item?.id ?? index),
+    name: String(item?.name || item?.server || item?.id || "Server").trim(),
+    url: String(item?.url || item?.link || "").trim(),
+    index: Number.isFinite(Number(item?.index)) ? Number(item.index) : index,
+  })).filter((item: ServerEntry) => /^https?:\\/\\//i.test(item.url))
+    .filter((item: ServerEntry, index: number, all: ServerEntry[]) =>
+      all.findIndex((other) => other.url === item.url) === index);
+}
+
 function parseServers(html: string, cheerio: any): ServerEntry[] {
+  const configured = parseWatchConfigServers(html);
+  if (configured.length) return configured;
   let list = parseServersCheerio(html, cheerio);
   if (list.length === 0) list = parseServersRegex(html);
 
