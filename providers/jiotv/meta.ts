@@ -1,12 +1,31 @@
 import { Info, ProviderContext } from "../types";
 
 const LIST_URL = "https://jjtvxweb.pages.dev/jstr4web.json";
+const CACHE_TTL_MS = 10 * 60 * 1000;
+const REQUEST_HEADERS = {
+  "User-Agent": "okhttp/4.9.3",
+  Referer: "https://www.jiotv.com/",
+  Origin: "https://www.jiotv.com",
+  Accept: "application/json",
+};
+let channelCache: { at: number; list: any[] } = { at: 0, list: [] };
+
 function channelsFrom(payload: any): any[] {
   if (Array.isArray(payload)) return payload;
   for (const key of ["channels", "data", "result", "results", "items"]) {
     if (Array.isArray(payload?.[key])) return payload[key];
   }
   return [];
+}
+async function fetchChannels(ctx: ProviderContext): Promise<any[]> {
+  if (channelCache.list.length && Date.now() - channelCache.at < CACHE_TTL_MS) return channelCache.list;
+  const response = await ctx.axios.get(LIST_URL, {
+    headers: { ...ctx.commonHeaders, ...REQUEST_HEADERS },
+    timeout: 15000,
+  });
+  const list = channelsFrom(response.data);
+  channelCache = { at: Date.now(), list };
+  return list;
 }
 
 export const getMeta = async function ({
@@ -19,11 +38,7 @@ export const getMeta = async function ({
   const id = String(link || "").trim();
   let channel: any = {};
   try {
-    const response = await providerContext.axios.get(LIST_URL, {
-      headers: { ...providerContext.commonHeaders, Accept: "application/json" },
-      timeout: 15000,
-    });
-    channel = channelsFrom(response.data).find((c) => String(c.id ?? c.channel_id ?? c.channelId ?? "") === id) || {};
+    channel = (await fetchChannels(providerContext)).find((c) => String(c.id ?? c.channel_id ?? c.channelId ?? "").trim() === id) || {};
   } catch (error) {
     console.warn("[JioTV Live] Metadata lookup failed.", error);
   }
