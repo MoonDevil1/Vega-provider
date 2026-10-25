@@ -31,22 +31,8 @@ npm test
 - A subtitle track is shown only when its URL and language/label can be read from the source player configuration or markup.
 - This implementation does not bypass DRM or authentication.
 
+## JioTV Live
 
-## JioTV Go (v1.0.0)
+This provider lists channels from the public index at `https://jjtvxweb.pages.dev/jstr4web.json` and exposes them in Vega's channel grid. It uses only direct HTTP(S) HLS or MP4 URLs already present in that index. It does not call the separate cookie/token endpoint, use supplied ClearKey values, or bypass DRM. Channels whose source requires DRM, a private subscription session, or unsupported stream formats will not play.
 
-This provider connects Vega to a **JioTV Go server that you run and authenticate yourself**. It does not host channels or include Jio credentials.
-
-1. Install and run [JioTV Go](https://github.com/JioTV-Go/jiotv_go) on a device you control.
-2. Complete its Jio login/OTP flow yourself.
-3. In Vega, open **JioTV Go** provider settings and enter the server URL (for example, `http://192.168.1.10:5001` when the server is reachable on your home network).
-4. Browse or search channels, then play a channel through Vega's existing player.
-
-The provider reads the server's `/channels` endpoint and requests HLS playback through `/live/:channel_id`. You must make the server reachable from the device running Vega. The default `127.0.0.1` address works only if JioTV Go runs on the same device.
-
-**Compatibility limits:** this provider only returns HLS streams when the configured JioTV Go server exposes a readable HLS playlist. Channels requiring separate subscriptions need the appropriate subscription on your account. Widevine/DRM DASH channels are not decrypted or bypassed, and may not play in Vega's current player. Channel availability and quality depend on JioTV Go, your account, region, network and upstream service.
-
-
-
-## Test JioTV Go in Codespaces
-
-Open [JioTV Go testing instructions](docs/JIOTV-GO-TESTING.md) to install and run the upstream JioTV Go server in a GitHub Codespace. From the Codespaces terminal, run `bash scripts/run-jiotv-go-codespace.sh`. Login and OTP are completed by you in that terminal; never store credentials or tokens in this repository.
+The channel index and upstream stream URLs are third-party services and can change or go offline at any time. Only use streams you are authorized to access.
