@@ -30,9 +30,3 @@ npm test
 - The provider does not replace Vega's player.
 - A subtitle track is shown only when its URL and language/label can be read from the source player configuration or markup.
 - This implementation does not bypass DRM or authentication.
-
-## JioTV Live
-
-This provider lists channels from the public index at `https://jjtvxweb.pages.dev/jstr4web.json` and exposes them in Vega's channel grid. It uses only direct HTTP(S) HLS or MP4 URLs already present in that index. It does not call the separate cookie/token endpoint, use supplied ClearKey values, or bypass DRM. Channels whose source requires DRM, a private subscription session, or unsupported stream formats will not play.
-
-The channel index and upstream stream URLs are third-party services and can change or go offline at any time. Only use streams you are authorized to access.
