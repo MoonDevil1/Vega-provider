@@ -1,93 +1,35 @@
 import { Post, ProviderContext } from "../types";
 
 type Channel = Record<string, any>;
+const LIST_URL = "https://jjtvxweb.pages.dev/jstr4web.json";
 
-const CATEGORY_NAMES: Record<string, string> = {
-  "0": "All Categories", "5": "Entertainment", "6": "Movies",
-  "7": "Kids", "8": "Sports", "9": "Lifestyle", "10": "Infotainment",
-  "12": "News", "13": "Music", "15": "Devotional", "16": "Business",
-  "17": "Educational", "18": "Shopping", "19": "JioDarshan",
-};
-const LANGUAGE_NAMES: Record<string, string> = {
-  "0": "All Languages", "1": "Hindi", "2": "Marathi", "3": "Punjabi",
-  "4": "Urdu", "5": "Bengali", "6": "English", "7": "Malayalam",
-  "8": "Tamil", "9": "Gujarati", "10": "Odia", "11": "Telugu",
-  "12": "Bhojpuri", "13": "Kannada", "14": "Assamese", "15": "Nepali",
-  "16": "French", "18": "Other",
-};
-
-function baseUrlFrom(ctx: ProviderContext): Promise<string> {
-  return ctx.kvStore.get<string>("jiotvBaseUrl").then((v) =>
-    String(v || "http://127.0.0.1:5001").trim().replace(/\/+$/, ""),
-  );
-}
-function channelList(payload: any): Channel[] {
+function channelsFrom(payload: any): Channel[] {
   if (Array.isArray(payload)) return payload;
-  // JioTV Go's documented ChannelsResponse is { code, message, result: [...] }.
-  for (const key of ["result", "channels", "data", "results", "items"]) {
+  for (const key of ["channels", "data", "result", "results", "items"]) {
     if (Array.isArray(payload?.[key])) return payload[key];
-    if (Array.isArray(payload?.[key]?.result)) return payload[key].result;
-    if (Array.isArray(payload?.[key]?.channels)) return payload[key].channels;
   }
   return [];
 }
-function getId(c: Channel): string {
-  return String(c.id ?? c.channel_id ?? c.channelId ?? c.channelID ?? "").trim();
+function idOf(c: Channel): string {
+  return String(c.id ?? c.channel_id ?? c.channelId ?? "").trim();
 }
-function getName(c: Channel): string {
-  return String(c.name ?? c.channel_name ?? c.channelName ?? c.title ?? "").trim();
+function nameOf(c: Channel): string {
+  return String(c.name ?? c.title ?? c.channel_name ?? c.channelName ?? "").trim();
 }
-function mapped(value: any, names: Record<string, string>): string {
-  const raw = String(value ?? "").trim();
-  return names[raw] || raw;
+function logoOf(c: Channel): string {
+  const value = String(c.logo ?? c.logoUrl ?? c.logo_url ?? c.image ?? "").trim();
+  return /^https?:\/\//i.test(value) ? value : "";
 }
-function getLanguage(c: Channel): string {
-  return mapped(c.language ?? c.channelLanguageId ?? c.language_id ?? c.lang, LANGUAGE_NAMES);
-}
-function getGenre(c: Channel): string {
-  return mapped(c.genre ?? c.channelCategoryId ?? c.category_id ?? c.category ?? c.group ?? c.type, CATEGORY_NAMES);
-}
-function getLogo(c: Channel): string {
-  return String(c.logo ?? c.logo_url ?? c.logoUrl ?? c.image ?? c.icon ?? "").trim();
-}
-function matchesFilter(c: Channel, filter: string): boolean {
-  const f = String(filter || "all");
-  if (f === "all") return true;
-  const [kind, ...rest] = f.split("/");
-  const wanted = rest.join("/").trim().toLowerCase();
-  if (!wanted) return true;
-  if (kind === "language") return getLanguage(c).toLowerCase() === wanted;
-  if (kind === "genre") return getGenre(c).toLowerCase() === wanted;
-  return false;
-}
-function toPost(c: Channel, base: string): Post | null {
-  const id = getId(c);
-  const title = getName(c);
-  if (!id || !title) return null;
-  const logo = getLogo(c);
-  return {
-    title,
-    link: base + "/live/" + encodeURIComponent(id),
-    image: /^https?:\/\//i.test(logo) ? logo : "",
-    provider: "jiotv",
-    tag: [getLanguage(c), getGenre(c)].filter(Boolean).join(" · "),
-  };
-}
-async function fetchChannels(ctx: ProviderContext): Promise<{ base: string; channels: Channel[] }> {
-  const base = await baseUrlFrom(ctx);
-  const response = await ctx.axios.get(base + "/channels", {
+async function fetchChannels(ctx: ProviderContext): Promise<Channel[]> {
+  const response = await ctx.axios.get(LIST_URL, {
     headers: { ...ctx.commonHeaders, Accept: "application/json" },
-    timeout: 12000,
+    timeout: 15000,
   });
-  const channels = channelList(response.data);
-  if (!channels.length) {
-    throw new Error("JioTV Go /channels returned no channel array (expected { result: [...] }). Check server version and login.");
-  }
-  return { base, channels };
+  return channelsFrom(response.data).filter((c) => idOf(c) && nameOf(c));
 }
 
 export const getPosts = async function ({
-  filter,
+  page,
   providerContext,
 }: {
   filter: string;
@@ -97,19 +39,24 @@ export const getPosts = async function ({
   providerContext: ProviderContext;
 }): Promise<Post[]> {
   try {
-    const { base, channels } = await fetchChannels(providerContext);
-    return channels
-      .filter((c) => matchesFilter(c, filter))
-      .map((c) => toPost(c, base))
-      .filter((p): p is Post => Boolean(p));
+    const all = await fetchChannels(providerContext);
+    const safePage = Math.max(1, Number(page) || 1);
+    return all.slice((safePage - 1) * 40, safePage * 40).map((c) => ({
+      title: nameOf(c),
+      link: idOf(c),
+      image: logoOf(c),
+      provider: "jiotv",
+      tag: String(c.language ?? c.lang ?? c.category ?? c.genre ?? "Live TV"),
+    }));
   } catch (error) {
-    console.warn("[JioTV] Category load failed. Verify the server URL and /channels response.", error);
+    console.warn("[JioTV Live] Could not load the public channel index.", error);
     return [];
   }
 };
 
 export const getSearchPosts = async function ({
   searchQuery,
+  page,
   providerContext,
 }: {
   searchQuery: string;
@@ -121,13 +68,21 @@ export const getSearchPosts = async function ({
   const query = String(searchQuery || "").trim().toLowerCase();
   if (!query) return [];
   try {
-    const { base, channels } = await fetchChannels(providerContext);
-    return channels
-      .filter((c) => [getName(c), getLanguage(c), getGenre(c)].some((v) => v.toLowerCase().includes(query)))
-      .map((c) => toPost(c, base))
-      .filter((p): p is Post => Boolean(p));
+    const all = await fetchChannels(providerContext);
+    const found = all.filter((c) =>
+      [nameOf(c), String(c.language ?? c.lang ?? ""), String(c.category ?? c.genre ?? "")]
+        .some((v) => v.toLowerCase().includes(query)),
+    );
+    const safePage = Math.max(1, Number(page) || 1);
+    return found.slice((safePage - 1) * 40, safePage * 40).map((c) => ({
+      title: nameOf(c),
+      link: idOf(c),
+      image: logoOf(c),
+      provider: "jiotv",
+      tag: String(c.language ?? c.lang ?? c.category ?? c.genre ?? "Live TV"),
+    }));
   } catch (error) {
-    console.warn("[JioTV] Search failed. Check the JioTV Go server URL and login.", error);
+    console.warn("[JioTV Live] Channel search failed.", error);
     return [];
   }
 };
