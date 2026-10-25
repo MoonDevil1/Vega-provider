@@ -1,6 +1,14 @@
 import { Stream, ProviderContext } from "../types";
 
 const LIST_URL = "https://jjtvxweb.pages.dev/jstr4web.json";
+const CACHE_TTL_MS = 10 * 60 * 1000;
+const REQUEST_HEADERS = {
+  "User-Agent": "okhttp/4.9.3",
+  Referer: "https://www.jiotv.com/",
+  Origin: "https://www.jiotv.com",
+  Accept: "application/json",
+};
+let channelCache: { at: number; list: any[] } = { at: 0, list: [] };
 
 function channelsFrom(payload: any): any[] {
   if (Array.isArray(payload)) return payload;
@@ -12,15 +20,27 @@ function channelsFrom(payload: any): any[] {
 function idOf(c: any): string {
   return String(c?.id ?? c?.channel_id ?? c?.channelId ?? "").trim();
 }
-function isAllowedDirectMedia(url: string): boolean {
+async function fetchChannels(ctx: ProviderContext, signal?: AbortSignal): Promise<any[]> {
+  if (channelCache.list.length && Date.now() - channelCache.at < CACHE_TTL_MS) return channelCache.list;
+  const response = await ctx.axios.get(LIST_URL, {
+    headers: { ...ctx.commonHeaders, ...REQUEST_HEADERS },
+    timeout: 15000,
+    signal,
+  });
+  const list = channelsFrom(response.data);
+  channelCache = { at: Date.now(), list };
+  return list;
+}
+function directMediaType(url: string): string | null {
   try {
     const u = new URL(url);
-    if (u.protocol !== "https:" && u.protocol !== "http:") return false;
-    // Do not attempt DRM/DASH playback or handle supplied decryption keys/tokens.
-    if (/\.mpd$/i.test(u.pathname)) return false;
-    return /\.m3u8?$/i.test(u.pathname) || /\.mp4$/i.test(u.pathname);
+    if (u.protocol !== "https:" && u.protocol !== "http:") return null;
+    if (/\.mpd$/i.test(u.pathname)) return "mpd";
+    if (/\.m3u8?$/i.test(u.pathname)) return "m3u8";
+    if (/\.mp4$/i.test(u.pathname)) return "mp4";
+    return null;
   } catch {
-    return false;
+    return null;
   }
 }
 
@@ -38,27 +58,28 @@ export const getStream = async function ({
   const id = String(link || "").trim();
   if (!id) return [];
   try {
-    const response = await providerContext.axios.get(LIST_URL, {
-      headers: { ...providerContext.commonHeaders, Accept: "application/json" },
-      timeout: 15000,
-      signal,
-    });
-    const channel = channelsFrom(response.data).find((c) => idOf(c) === id);
+    const channel = (await fetchChannels(providerContext, signal)).find((c) => idOf(c) === id);
     if (!channel) return [];
 
-    // Use only a direct, non-DRM HLS/MP4 URL already published in the channel record.
-    // No external cookie/token endpoint or ClearKey/DRM material is requested or used.
+    // Only use direct URLs published in the public channel record. No cookie/token
+    // endpoint or ClearKey values are fetched or passed to the player.
     const url = String(channel.url ?? channel.stream_url ?? channel.streamUrl ?? channel.play_url ?? "").trim();
-    if (!isAllowedDirectMedia(url)) {
-      console.warn("[JioTV Live] This channel has no supported direct HLS/MP4 URL; DRM/DASH streams are not handled.");
+    const mediaType = directMediaType(url);
+    if (!mediaType) {
+      console.warn("[JioTV Live] No supported direct HLS, MP4, or DASH URL was published for this channel.");
       return [];
     }
     return [{
       server: "Public channel source",
       link: url,
-      type: /\.mp4(?:$|\?)/i.test(url) ? "mp4" : "m3u8",
+      type: mediaType,
       quality: String(channel.quality ?? "auto"),
-      headers: { Referer: "https://www.jiotv.com/" },
+      headers: {
+        "User-Agent": "okhttp/4.9.3",
+        Referer: "https://www.jiotv.com/",
+        Origin: "https://www.jiotv.com",
+        ...(channel.headers && typeof channel.headers === "object" ? channel.headers : {}),
+      },
     }];
   } catch (error) {
     console.warn("[JioTV Live] Stream lookup failed.", error);
