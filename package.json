@@ -17,8 +17,7 @@
     "watch:dev": "nodemon --watch providers --ext ts --exec \"npm run build\" & npm run dev",
     "dev:auto": "concurrently \"nodemon --watch providers --ext ts --exec \\\"npm run build:dev\\\"\" \"npm run dev\"",
     "auto": "node auto-dev.js",
-    "start": "npm run build && npm run dev",
-    "test:jiotv": "node tests/test-jiotv-categories.js"
+    "start": "npm run build && npm run dev"
   },
   "devDependencies": {
     "@types/cheerio": "^0.22.35",
