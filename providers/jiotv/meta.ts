@@ -1,5 +1,14 @@
 import { Info, ProviderContext } from "../types";
 
+const LIST_URL = "https://jjtvxweb.pages.dev/jstr4web.json";
+function channelsFrom(payload: any): any[] {
+  if (Array.isArray(payload)) return payload;
+  for (const key of ["channels", "data", "result", "results", "items"]) {
+    if (Array.isArray(payload?.[key])) return payload[key];
+  }
+  return [];
+}
+
 export const getMeta = async function ({
   link,
   providerContext,
@@ -7,43 +16,28 @@ export const getMeta = async function ({
   link: string;
   providerContext: ProviderContext;
 }): Promise<Info> {
-  const { axios } = providerContext;
-  const base = String((await providerContext.kvStore.get<string>("jiotvBaseUrl")) || "http://127.0.0.1:5001").trim().replace(/\/+$/, "");
-  const id = decodeURIComponent(String(link).split("/").pop() || "");
-  let title = "JioTV Channel " + id;
-  let image = "";
-  let synopsis = "Live TV channel provided by your authenticated JioTV Go instance.";
+  const id = String(link || "").trim();
+  let channel: any = {};
   try {
-    const response = await axios.get(base + "/channels", {
+    const response = await providerContext.axios.get(LIST_URL, {
       headers: { ...providerContext.commonHeaders, Accept: "application/json" },
-      timeout: 12000,
+      timeout: 15000,
     });
-    const payload: any = response.data;
-    const channels: any[] = Array.isArray(payload) ? payload : (payload?.result || payload?.channels || payload?.data || payload?.results || []);
-    const channel = channels.find((c) => String(c.id ?? c.channel_id ?? c.channelId ?? c.channelID ?? "") === id);
-    if (channel) {
-      title = String(channel.name ?? channel.channel_name ?? channel.channelName ?? channel.title ?? title);
-      image = String(channel.logo ?? channel.logo_url ?? channel.logoUrl ?? channel.image ?? channel.icon ?? "");
-      const language = String(channel.language ?? channel.channelLanguageId ?? channel.language_id ?? channel.lang ?? "");
-      const genre = String(channel.genre ?? channel.channelCategoryId ?? channel.category_id ?? channel.category ?? channel.group ?? "");
-      synopsis = [language, genre].filter(Boolean).join(" · ") || synopsis;
-    }
+    channel = channelsFrom(response.data).find((c) => String(c.id ?? c.channel_id ?? c.channelId ?? "") === id) || {};
   } catch (error) {
-    console.warn("[JioTV] Metadata lookup failed:", error);
+    console.warn("[JioTV Live] Metadata lookup failed.", error);
   }
-  const streamUrl = base + "/live/" + encodeURIComponent(id);
+  const title = String(channel.name ?? channel.title ?? channel.channel_name ?? "Live TV Channel");
+  const image = String(channel.logo ?? channel.logoUrl ?? channel.logo_url ?? channel.image ?? "");
+  const directUrl = String(channel.url ?? channel.stream_url ?? channel.streamUrl ?? channel.play_url ?? "");
   return {
     title,
-    synopsis,
+    synopsis: "Live TV channel listed by the configured public channel index. Playback availability depends on the source.",
     image: /^https?:\/\//i.test(image) ? image : "",
     imdbId: "",
     type: "movie",
     tags: ["Live TV"],
-    linkList: [{
-      title: "Live",
-      quality: "Auto",
-      directLinks: [{ title, link: streamUrl, type: "movie" }],
-    }],
-    webUrl: base,
+    linkList: [{ title: "Live", quality: "Auto", directLinks: [{ title, link: directUrl || id, type: "movie" }] }],
+    webUrl: "https://www.jiotv.com/",
   };
 };
