@@ -9,11 +9,11 @@
     "disabled": false
   },
   {
-    "display_name": "JioTV Go",
+    "display_name": "JioTV Live",
     "value": "jiotv",
-    "version": "1.0.0",
+    "version": "1.1.0",
+    "icon": "",
     "type": "global",
-    "hasSettings": true,
     "disabled": false
   }
 ]
