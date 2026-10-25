@@ -2,6 +2,14 @@ import { Post, ProviderContext } from "../types";
 
 type Channel = Record<string, any>;
 const LIST_URL = "https://jjtvxweb.pages.dev/jstr4web.json";
+const CACHE_TTL_MS = 10 * 60 * 1000;
+const REQUEST_HEADERS = {
+  "User-Agent": "okhttp/4.9.3",
+  Referer: "https://www.jiotv.com/",
+  Origin: "https://www.jiotv.com",
+  Accept: "application/json",
+};
+let channelCache: { at: number; list: Channel[] } = { at: 0, list: [] };
 
 function channelsFrom(payload: any): Channel[] {
   if (Array.isArray(payload)) return payload;
@@ -21,11 +29,14 @@ function logoOf(c: Channel): string {
   return /^https?:\/\//i.test(value) ? value : "";
 }
 async function fetchChannels(ctx: ProviderContext): Promise<Channel[]> {
+  if (channelCache.list.length && Date.now() - channelCache.at < CACHE_TTL_MS) return channelCache.list;
   const response = await ctx.axios.get(LIST_URL, {
-    headers: { ...ctx.commonHeaders, Accept: "application/json" },
+    headers: { ...ctx.commonHeaders, ...REQUEST_HEADERS },
     timeout: 15000,
   });
-  return channelsFrom(response.data).filter((c) => idOf(c) && nameOf(c));
+  const list = channelsFrom(response.data).filter((c) => idOf(c) && nameOf(c));
+  channelCache = { at: Date.now(), list };
+  return list;
 }
 
 export const getPosts = async function ({
