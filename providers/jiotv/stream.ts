@@ -1,5 +1,29 @@
 import { Stream, ProviderContext } from "../types";
 
+const LIST_URL = "https://jjtvxweb.pages.dev/jstr4web.json";
+
+function channelsFrom(payload: any): any[] {
+  if (Array.isArray(payload)) return payload;
+  for (const key of ["channels", "data", "result", "results", "items"]) {
+    if (Array.isArray(payload?.[key])) return payload[key];
+  }
+  return [];
+}
+function idOf(c: any): string {
+  return String(c?.id ?? c?.channel_id ?? c?.channelId ?? "").trim();
+}
+function isAllowedDirectMedia(url: string): boolean {
+  try {
+    const u = new URL(url);
+    if (u.protocol !== "https:" && u.protocol !== "http:") return false;
+    // Do not attempt DRM/DASH playback or handle supplied decryption keys/tokens.
+    if (/\.mpd$/i.test(u.pathname)) return false;
+    return /\.m3u8?$/i.test(u.pathname) || /\.mp4$/i.test(u.pathname);
+  } catch {
+    return false;
+  }
+}
+
 export const getStream = async function ({
   link,
   providerContext,
@@ -11,48 +35,33 @@ export const getStream = async function ({
   providerContext: ProviderContext;
   isDownload?: boolean;
 }): Promise<Stream[]> {
-  const { axios } = providerContext;
-  const configuredBase = String((await providerContext.kvStore.get<string>("jiotvBaseUrl")) || "http://127.0.0.1:5001").trim().replace(/\/+$/, "");
-  const quality = String((await providerContext.kvStore.get<string>("jiotvQuality")) || "auto").toLowerCase();
-  let target = String(link || "").trim();
+  const id = String(link || "").trim();
+  if (!id) return [];
   try {
-    const u = new URL(target);
-    // Only accept streams routed through the configured JioTV Go server.
-    const configured = new URL(configuredBase);
-    if (u.origin !== configured.origin) {
-      const idMatch = u.pathname.match(/\/live\/(?:high\/|medium\/|low\/)?([^/?#]+)/i);
-      if (!idMatch) return [];
-      target = configuredBase + "/live/" + (quality === "auto" ? "" : quality + "/") + encodeURIComponent(decodeURIComponent(idMatch[1]));
-    } else if (/\/live\/mpd\//i.test(u.pathname) || /\.mpd(?:$|\?)/i.test(target)) {
-      // Vega's current provider contract does not provide a Widevine DRM license
-      // session. Never attempt to extract or bypass DRM-protected channels.
-      return [];
-    } else if (/\/live\//i.test(u.pathname) && quality !== "auto" && !/\/live\/(?:high|medium|low)\//i.test(u.pathname)) {
-      const idMatch = u.pathname.match(/\/live\/([^/?#]+)/i);
-      if (idMatch) target = configuredBase + "/live/" + quality + "/" + encodeURIComponent(decodeURIComponent(idMatch[1]));
-    }
-  } catch {
-    return [];
-  }
-
-  try {
-    const response = await axios.get(target, {
-      headers: { ...providerContext.commonHeaders, Accept: "application/vnd.apple.mpegurl, application/x-mpegURL, */*" },
-      timeout: 12000,
+    const response = await providerContext.axios.get(LIST_URL, {
+      headers: { ...providerContext.commonHeaders, Accept: "application/json" },
+      timeout: 15000,
       signal,
-      responseType: "text",
     });
-    const body = String(response.data || "");
-    if (!body.trimStart().startsWith("#EXTM3U")) return [];
+    const channel = channelsFrom(response.data).find((c) => idOf(c) === id);
+    if (!channel) return [];
+
+    // Use only a direct, non-DRM HLS/MP4 URL already published in the channel record.
+    // No external cookie/token endpoint or ClearKey/DRM material is requested or used.
+    const url = String(channel.url ?? channel.stream_url ?? channel.streamUrl ?? channel.play_url ?? "").trim();
+    if (!isAllowedDirectMedia(url)) {
+      console.warn("[JioTV Live] This channel has no supported direct HLS/MP4 URL; DRM/DASH streams are not handled.");
+      return [];
+    }
     return [{
-      server: "JioTV Go",
-      link: target,
-      type: "m3u8",
-      quality: quality === "high" ? "1080" : quality === "medium" ? "720" : quality === "low" ? "480" : "auto",
-      headers: { Referer: configuredBase + "/" },
+      server: "Public channel source",
+      link: url,
+      type: /\.mp4(?:$|\?)/i.test(url) ? "mp4" : "m3u8",
+      quality: String(channel.quality ?? "auto"),
+      headers: { Referer: "https://www.jiotv.com/" },
     }];
   } catch (error) {
-    console.warn("[JioTV] Stream check failed. Channel may require a separate subscription, be offline, or use DRM.", error);
+    console.warn("[JioTV Live] Stream lookup failed.", error);
     return [];
   }
 };
