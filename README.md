@@ -1,4 +1,4 @@
-# Vega Provider: MultiMovies (v1.5.1)
+# Vega Provider: MultiMovies (v1.5.2)
 
 Community provider extension for Vega App.
 
@@ -11,7 +11,7 @@ Community provider extension for Vega App.
 ## Install in Vega
 
 1. Open Vega's provider/extension settings.
-2. Add repository URL: `https://github.com/MoonDevil1/Vega-provider`.
+2. Add repository URL: `https://github.com/MoonDevil1/Vega-providers`.
 3. Refresh the provider list after the build workflow finishes.
 4. Select **MultiMovies**.
 
