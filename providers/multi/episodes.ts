@@ -75,6 +75,34 @@ function parseEpisodes(html: string, pageUrl: string, season: string, cheerio: a
     });
   }
 
+  // Match the official provider's legacy episode-list fallback.
+  // Some MultiMovies pages expose episode titles as h5 + HubCloud buttons
+  // instead of Cinejoy episode cards or /episode/ anchors.
+  if (!episodes.length) {
+    $(".entry-content, .entry-inner, .download-links-div").find("h5").each((_index: number, element: any) => {
+      const heading = $(element);
+      const title = clean(heading.text());
+      if (!title) return;
+
+      const button = heading.next(".downloads-btns-div").find("a[href]").filter((_buttonIndex: number, node: any) => {
+        const anchor = $(node);
+        const style = String(anchor.attr("style") || "").toLowerCase().replace(/\\s+/g, "");
+        const label = clean(anchor.text() + " " + (anchor.attr("title") || "") + " " + (anchor.attr("href") || ""));
+        return /hub.?cloud/i.test(label) || style.includes("linear-gradient(135deg,#e629d0,#007bff)");
+      }).first();
+
+      const rawHref = button.attr("href") || "";
+      if (!rawHref) return;
+
+      let href = "";
+      try { href = new URL(rawHref, pageUrl).toString(); } catch { return; }
+      if (seen.has(href)) return;
+
+      seen.add(href);
+      episodes.push({ title, link: href });
+    });
+  }
+
   return episodes;
 }
 
