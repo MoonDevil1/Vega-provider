@@ -44,18 +44,29 @@ function parseEpisodes(html: string, pageUrl: string, season: string, cheerio: a
     episodes.push({ title, link: href });
   });
 
-  // Fallback for an episode layout without the expected card class.
+  // Desktop runs providers in QuickJS, where keeping the scraper's DOM
+  // assumptions narrow can turn a valid page into an empty episode list.
+  // Fall back to any episode URL exposed by the selected page, including
+  // lazy-loaded data attributes used by alternate layouts.
   if (!episodes.length) {
-    $("a[href*='/season/'][href*='/episode/']").each((_index: number, node: any) => {
+    $("a[href*='/episode/'], a[data-href*='/episode/'], a[data-url*='/episode/'], [data-episode-url]").each((_index: number, node: any) => {
       const anchor = $(node);
+      const rawHref =
+        anchor.attr("href") ||
+        anchor.attr("data-href") ||
+        anchor.attr("data-url") ||
+        anchor.attr("data-episode-url") ||
+        anchor.find("a[href]").first().attr("href") ||
+        "";
       let href = "";
-      try { href = new URL(anchor.attr("href") || "", pageUrl).toString(); } catch { return; }
+      try { href = new URL(rawHref, pageUrl).toString(); } catch { return; }
       if (!href || seen.has(href)) return;
       const title = clean(
         anchor.find(".cinejoy-ep-name").first().text() ||
         anchor.attr("title") ||
         anchor.text() ||
         anchor.find("img").first().attr("alt") ||
+        anchor.closest(".cinejoy-ep-card, article, li").text() ||
         "",
       );
       if (!title) return;
@@ -137,30 +148,38 @@ export const getEpisodes = async function ({
 
     const all: EpisodeLink[] = [];
     const seen = new Set<string>();
-    const pageJobs = ranges.map(async (range) => {
-      if (range === initialRange) {
-        return parseEpisodes(initialHtml, inputUrl.toString(), selectedSeason, cheerio);
-      }
-      const pageUrl = buildRangeUrl(inputUrl, selectedSeason, range, order);
-      try {
-        const pageResponse = await axios.get(pageUrl, {
-          headers: requestHeaders,
-          timeout: 15000,
-          maxRedirects: 5,
-        });
-        return parseEpisodes(String(pageResponse.data || ""), pageUrl, selectedSeason, cheerio);
-      } catch (error) {
-        console.warn("[MultiMovies] episode range request failed:", pageUrl, error);
-        return [];
-      }
-    });
 
-    const batches = await Promise.all(pageJobs);
-    for (const batch of batches) {
-      for (const episode of batch) {
-        if (seen.has(episode.link)) continue;
-        seen.add(episode.link);
-        all.push(episode);
+    // Vega Desktop's isolated provider runtime limits concurrent host RPC
+    // requests. Fetch range pages in small batches instead of firing every
+    // range at once (long seasons can expose more than 16 ranges).
+    const rangeConcurrency = 4;
+    for (let start = 0; start < ranges.length; start += rangeConcurrency) {
+      const rangeBatch = ranges.slice(start, start + rangeConcurrency);
+      const pageJobs = rangeBatch.map(async (range) => {
+        if (range === initialRange) {
+          return parseEpisodes(initialHtml, inputUrl.toString(), selectedSeason, cheerio);
+        }
+        const pageUrl = buildRangeUrl(inputUrl, selectedSeason, range, order);
+        try {
+          const pageResponse = await axios.get(pageUrl, {
+            headers: requestHeaders,
+            timeout: 15000,
+            maxRedirects: 5,
+          });
+          return parseEpisodes(String(pageResponse.data || ""), pageUrl, selectedSeason, cheerio);
+        } catch (error) {
+          console.warn("[MultiMovies] episode range request failed:", pageUrl, error);
+          return [];
+        }
+      });
+
+      const batches = await Promise.all(pageJobs);
+      for (const batch of batches) {
+        for (const episode of batch) {
+          if (seen.has(episode.link)) continue;
+          seen.add(episode.link);
+          all.push(episode);
+        }
       }
     }
 
