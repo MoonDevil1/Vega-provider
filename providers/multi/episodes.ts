@@ -129,25 +129,25 @@ function parseEpisodes(html: string, pageUrl: string, season: string, cheerio: a
       episodes.push({ title, link: href });
     };
 
-    const anchors = /<a\\b([^>]*)>([\\s\\S]*?)<\\/a\\s*>/gi;
+    const anchors = /<a\b([^>]*)>([\s\S]*?)<\/a\s*>/gi;
     let anchorMatch: RegExpExecArray | null;
     while ((anchorMatch = anchors.exec(html))) {
       const attrs = anchorMatch[1] || "";
       const href =
-        attrs.match(/\\b(?:href|data-href|data-url|data-episode-url)\\s*=\\s*["']([^"']+)["']/i)?.[1] || "";
+        attrs.match(/\b(?:href|data-href|data-url|data-episode-url)\s*=\s*["']([^"']+)["']/i)?.[1] || "";
       const title =
-        attrs.match(/\\b(?:title|aria-label)\\s*=\\s*["']([^"']+)["']/i)?.[1] ||
+        attrs.match(/\b(?:title|aria-label)\s*=\s*["']([^"']+)["']/i)?.[1] ||
         anchorMatch[2] ||
         "";
       addCandidate(href, title);
     }
 
     // Some themes attach the episode URL to a non-anchor card element.
-    const dataUrls = /<[^>]+\\bdata-episode-url\\s*=\\s*["']([^"']+)["'][^>]*>/gi;
+    const dataUrls = /<[^>]+\bdata-episode-url\s*=\s*["']([^"']+)["'][^>]*>/gi;
     let dataMatch: RegExpExecArray | null;
     while ((dataMatch = dataUrls.exec(html))) {
       const title =
-        dataMatch[0].match(/\\b(?:title|aria-label)\\s*=\\s*["']([^"']+)["']/i)?.[1] || "";
+        dataMatch[0].match(/\b(?:title|aria-label)\s*=\s*["']([^"']+)["']/i)?.[1] || "";
       addCandidate(dataMatch[1], title);
     }
   }
