@@ -50,6 +50,12 @@ const secondSeason = seasonPage({
   episodes: [{ number: 4, name: "Season Two Premiere" }],
 });
 
+const legacyDownloadLinksPage =
+  '<html><body><div class="entry-content">' +
+  '<h5>Episode 1: Pilot</h5>' +
+  '<div class="downloads-btns-div"><a href="/hubcloud/episode-1" style="background: linear-gradient(135deg,#e629d0,#007bff);">HubCloud</a></div>' +
+  '</div></body></html>';
+
 const episodeRequests = [];
 const platformUserAgent = "Mozilla/5.0 (Linux; Android 15; Pixel 9) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Mobile Safari/537.36";
 
@@ -66,6 +72,7 @@ const providerContext = {
       if (parsed.pathname === "/series/test-show" && range === "1" && season === "1") return { data: firstRange, status: 200 };
       if (parsed.pathname === "/series/test-show" && range === "3" && season === "1") return { data: secondRange, status: 200 };
       if (parsed.pathname === "/series/test-show" && season === "2") return { data: secondSeason, status: 200 };
+      if (parsed.pathname === "/series/test-show" && season === "3") return { data: legacyDownloadLinksPage, status: 200 };
       throw new Error("Unexpected URL: " + url);
     },
   },
@@ -98,6 +105,11 @@ const providerContext = {
   const seasonTwo = await getEpisodes({ url: seriesUrl + "?season=2", providerContext });
   assert.equal(seasonTwo.length, 1);
   assert.match(seasonTwo[0].title, /Season Two Premiere/);
+
+  const legacySeason = await getEpisodes({ url: seriesUrl + "?season=3", providerContext });
+  assert.equal(legacySeason.length, 1, "legacy h5 + HubCloud episode lists should be supported");
+  assert.equal(legacySeason[0].title, "Episode 1: Pilot");
+  assert.equal(legacySeason[0].link, base + "/hubcloud/episode-1");
 
   console.log("MultiMovies regression tests passed: season parsing and complete episode-range pagination.");
 })().catch((error) => {
