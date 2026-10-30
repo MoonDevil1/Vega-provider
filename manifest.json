@@ -2,7 +2,7 @@
   {
     "display_name": "MultiMovies",
     "value": "multi",
-    "version": "1.5.3",
+    "version": "1.5.4",
     "icon": "https://cdn.jsdelivr.net/gh/MoonDevil1/Vega-providers@main/assets/multimovies.svg",
     "type": "global",
     "hasSettings": false,
