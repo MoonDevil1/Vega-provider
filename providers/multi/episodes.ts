@@ -103,6 +103,55 @@ function parseEpisodes(html: string, pageUrl: string, season: string, cheerio: a
     });
   }
 
+  // Last-resort parser for QuickJS/desktop builds where the HTML parser may
+  // not expose the same selector tree as the mobile runtime. Read episode URLs
+  // directly from anchor attributes instead of depending on a particular card
+  // class or nested DOM structure.
+  if (!episodes.length) {
+    const decodeHtml = (value: string) =>
+      String(value || "")
+        .replace(/&amp;/gi, "&")
+        .replace(/&#x2f;/gi, "/")
+        .replace(/&#47;/g, "/")
+        .replace(/&quot;/gi, '"')
+        .replace(/&#39;|&apos;/gi, "'")
+        .trim();
+    const addCandidate = (rawHref: string, rawTitle: string) => {
+      const decodedHref = decodeHtml(rawHref);
+      if (!decodedHref || !/\/episode\//i.test(decodedHref)) return;
+      let href = "";
+      try { href = new URL(decodedHref, pageUrl).toString(); } catch { return; }
+      if (seen.has(href)) return;
+      const title = decodeHtml(rawTitle.replace(/<[^>]*>/g, " "))
+        .replace(/\s+/g, " ")
+        .trim() || `Episode ${episodes.length + 1}`;
+      seen.add(href);
+      episodes.push({ title, link: href });
+    };
+
+    const anchors = /<a\\b([^>]*)>([\\s\\S]*?)<\\/a\\s*>/gi;
+    let anchorMatch: RegExpExecArray | null;
+    while ((anchorMatch = anchors.exec(html))) {
+      const attrs = anchorMatch[1] || "";
+      const href =
+        attrs.match(/\\b(?:href|data-href|data-url|data-episode-url)\\s*=\\s*["']([^"']+)["']/i)?.[1] || "";
+      const title =
+        attrs.match(/\\b(?:title|aria-label)\\s*=\\s*["']([^"']+)["']/i)?.[1] ||
+        anchorMatch[2] ||
+        "";
+      addCandidate(href, title);
+    }
+
+    // Some themes attach the episode URL to a non-anchor card element.
+    const dataUrls = /<[^>]+\\bdata-episode-url\\s*=\\s*["']([^"']+)["'][^>]*>/gi;
+    let dataMatch: RegExpExecArray | null;
+    while ((dataMatch = dataUrls.exec(html))) {
+      const title =
+        dataMatch[0].match(/\\b(?:title|aria-label)\\s*=\\s*["']([^"']+)["']/i)?.[1] || "";
+      addCandidate(dataMatch[1], title);
+    }
+  }
+
   return episodes;
 }
 
