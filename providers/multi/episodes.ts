@@ -86,7 +86,7 @@ function parseEpisodes(html: string, pageUrl: string, season: string, cheerio: a
 
       const button = heading.next(".downloads-btns-div").find("a[href]").filter((_buttonIndex: number, node: any) => {
         const anchor = $(node);
-        const style = String(anchor.attr("style") || "").toLowerCase().replace(/\\s+/g, "");
+        const style = String(anchor.attr("style") || "").toLowerCase().replace(/\s+/g, "");
         const label = clean(anchor.text() + " " + (anchor.attr("title") || "") + " " + (anchor.attr("href") || ""));
         return /hub.?cloud/i.test(label) || style.includes("linear-gradient(135deg,#e629d0,#007bff)");
       }).first();
