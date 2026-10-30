@@ -56,6 +56,12 @@ const legacyDownloadLinksPage =
   '<div class="downloads-btns-div"><a href="/hubcloud/episode-1" style="background: linear-gradient(135deg,#e629d0,#007bff);">HubCloud</a></div>' +
   '</div></body></html>';
 
+const alternateDesktopMarkupPage =
+  '<html><body><section class="episode-list">' +
+  '<div class="episode-card" data-episode-url="/series/test-show/season/4/episode/9" title="Episode 9: Alternate markup"></div>' +
+  '<a data-url="/series/test-show/season/4/episode/10" aria-label="Episode 10: Data URL">Open</a>' +
+  '</section></body></html>';
+
 const episodeRequests = [];
 const platformUserAgent = "Mozilla/5.0 (Linux; Android 15; Pixel 9) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Mobile Safari/537.36";
 
@@ -73,6 +79,7 @@ const providerContext = {
       if (parsed.pathname === "/series/test-show" && range === "3" && season === "1") return { data: secondRange, status: 200 };
       if (parsed.pathname === "/series/test-show" && season === "2") return { data: secondSeason, status: 200 };
       if (parsed.pathname === "/series/test-show" && season === "3") return { data: legacyDownloadLinksPage, status: 200 };
+      if (parsed.pathname === "/series/test-show" && season === "4") return { data: alternateDesktopMarkupPage, status: 200 };
       throw new Error("Unexpected URL: " + url);
     },
   },
@@ -111,7 +118,13 @@ const providerContext = {
   assert.equal(legacySeason[0].title, "Episode 1: Pilot");
   assert.equal(legacySeason[0].link, base + "/hubcloud/episode-1");
 
-  console.log("MultiMovies regression tests passed: season parsing and complete episode-range pagination.");
+  const alternateMarkupEpisodes = await getEpisodes({ url: seriesUrl + "?season=4", providerContext });
+  assert.equal(alternateMarkupEpisodes.length, 2, "episode URLs in alternate card/data attributes should be recovered");
+  assert.equal(alternateMarkupEpisodes[0].link, seriesUrl + "/season/4/episode/9");
+  assert.match(alternateMarkupEpisodes[0].title, /Episode 9: Alternate markup/);
+  assert.equal(alternateMarkupEpisodes[1].link, seriesUrl + "/season/4/episode/10");
+
+  console.log("MultiMovies regression tests passed: season parsing, episode-range pagination, and alternate desktop markup.");
 })().catch((error) => {
   console.error(error);
   process.exitCode = 1;
