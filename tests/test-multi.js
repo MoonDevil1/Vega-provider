@@ -50,11 +50,15 @@ const secondSeason = seasonPage({
   episodes: [{ number: 4, name: "Season Two Premiere" }],
 });
 
+const episodeRequests = [];
+const expectedEpisodeUserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36 Edg/131.0.0.0";
+
 const providerContext = {
   cheerio,
-  commonHeaders: {},
+  commonHeaders: { "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36" },
   axios: {
-    get: async (url) => {
+    get: async (url, config = {}) => {
+      episodeRequests.push({ url, headers: config.headers || {} });
       const parsed = new URL(url);
       const season = parsed.searchParams.get("season") || "1";
       const range = parsed.searchParams.get("ep_range");
@@ -78,8 +82,13 @@ const providerContext = {
   ]);
   assert.ok(meta.linkList.every((entry) => entry.episodesLink));
 
+  const episodeRequestStart = episodeRequests.length;
   const seasonOne = await getEpisodes({ url: seriesUrl + "?season=1", providerContext });
   assert.equal(seasonOne.length, 3, "all episode ranges should be combined into one season");
+  const seasonOneRequests = episodeRequests.slice(episodeRequestStart);
+  assert.ok(seasonOneRequests.length > 0, "episode requests should be made");
+  assert.ok(seasonOneRequests.every(({ headers }) => headers["User-Agent"] === expectedEpisodeUserAgent), "episode requests must use the same browser User-Agent as metadata, regardless of platform defaults");
+  assert.ok(seasonOneRequests.every(({ headers }) => headers.Referer === base), "episode requests must use the provider site as Referer");
   assert.deepEqual(seasonOne.map((episode) => episode.link), [
     seriesUrl + "/season/1/episode/1",
     seriesUrl + "/season/1/episode/2",
