@@ -51,11 +51,11 @@ const secondSeason = seasonPage({
 });
 
 const episodeRequests = [];
-const expectedEpisodeUserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36 Edg/131.0.0.0";
+const platformUserAgent = "Mozilla/5.0 (Linux; Android 15; Pixel 9) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Mobile Safari/537.36";
 
 const providerContext = {
   cheerio,
-  commonHeaders: { "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36" },
+  commonHeaders: { "User-Agent": platformUserAgent },
   axios: {
     get: async (url, config = {}) => {
       episodeRequests.push({ url, headers: config.headers || {} });
@@ -87,7 +87,7 @@ const providerContext = {
   assert.equal(seasonOne.length, 3, "all episode ranges should be combined into one season");
   const seasonOneRequests = episodeRequests.slice(episodeRequestStart);
   assert.ok(seasonOneRequests.length > 0, "episode requests should be made");
-  assert.ok(seasonOneRequests.every(({ headers }) => headers["User-Agent"] === expectedEpisodeUserAgent), "episode requests must use the same browser User-Agent as metadata, regardless of platform defaults");
+  assert.ok(seasonOneRequests.every(({ headers }) => headers["User-Agent"] === platformUserAgent), "episode requests must preserve Vega platform User-Agent");
   assert.ok(seasonOneRequests.every(({ headers }) => headers.Referer === base), "episode requests must use the provider site as Referer");
   assert.deepEqual(seasonOne.map((episode) => episode.link), [
     seriesUrl + "/season/1/episode/1",
