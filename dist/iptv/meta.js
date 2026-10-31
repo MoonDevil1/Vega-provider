@@ -1,20 +1,27 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.getMeta = async function ({ link, providerContext }) {
-    let title = "Live TV", image = "", directLinks = [];
+    let title = "Live TV";
+    let image = "";
+    let directLinks = [];
     const rawLink = String(link || "");
     const channelPart = rawLink.replace(/^iptv:\/\/channel\//, "").split("?")[0];
     let id = "";
     try { id = decodeURIComponent(channelPart); } catch { id = channelPart; }
     try {
-        const cached = await providerContext.kvStore.get("iptv-org-in-hindi-v5");
+        const cached = await providerContext.kvStore.get("iptv-org-in-hindi-v6");
         const matches = cached && Array.isArray(cached.entries) ? cached.entries.filter((entry) => entry.id === id) : [];
         if (matches.length) {
             title = matches[0].name || title;
             image = matches[0].logo || "";
-            directLinks = matches.map((entry, index) => ({ title: "Stream " + (index + 1), link: entry.url, type: "movie" }));
+            directLinks = matches.map((entry, index) => ({
+                title: "Stream " + (index + 1),
+                link: Object.keys(entry.headers || {}).length ? entry.url + "#vega_headers=" + encodeURIComponent(JSON.stringify(entry.headers)) : entry.url,
+                type: "movie",
+            }));
         }
-    } catch { }
+    }
+    catch { }
     if (!directLinks.length) {
         const match = rawLink.match(/[?&]stream=([^&]+)/);
         if (match) try { directLinks = [{ title: "Watch Live", link: decodeURIComponent(match[1]), type: "movie" }]; } catch { }
@@ -24,5 +31,12 @@ exports.getMeta = async function ({ link, providerContext }) {
         try { title = new URL(rawLink).hostname.replace(/^www\./, ""); } catch { }
     }
     if (title === "Live TV" && id) title = id.replace(/\.in$/i, "").replace(/[._-]+/g, " ");
-    return { title, synopsis: "Live channel from the public iptv-org India playlist. All distinct listed Hindi-category mirrors are retained. Availability can vary by region.", image, imdbId: "", type: "movie", linkList: [{ title: "Live", quality: "Auto", directLinks }] };
+    return {
+        title,
+        synopsis: "Live channel scraped from the public iptv-org India playlist. Alternate listed stream URLs and source playback headers are preserved. Availability can vary by region.",
+        image,
+        imdbId: "",
+        type: "movie",
+        linkList: [{ title: "Live", quality: "Auto", directLinks }],
+    };
 };
