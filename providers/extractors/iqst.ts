@@ -154,6 +154,10 @@ async function fetchFiles(
   const html: string = res.data;
 
   console.log("[iqst] embed bytes: " + html.length);
+    if (/data-link\\s*=\\s*["']https?:\\/\\/pro\\.iqsmartgames\\.com\\/evid\\//i.test(html)) {
+      console.log("[iqst] current evid server list detected; skip legacy file API");
+      return [];
+    }
 
   const varOf = function (name: string): string {
     const re = new RegExp(
@@ -491,7 +495,7 @@ async function resolveEmbedMedia(
     const origin = new URL(pageUrl).origin;
     const response = await axios.get(pageUrl, {
       headers: Object.assign({}, headers, { Referer: origin + "/" }),
-      signal, timeout: 9000, maxRedirects: 4,
+      signal, timeout: 5000, maxRedirects: 4,
     });
     html = typeof response.data === "string" ? response.data : JSON.stringify(response.data || "");
   } catch (e: any) {
