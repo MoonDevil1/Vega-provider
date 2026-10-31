@@ -6,7 +6,7 @@ import { Stream } from "../types";
 /* ================================================================== */
 const API     = "https://streams.iqsmartgames.com";
 const PLAYER  = "https://pro.iqsmartgames.com";
-const REFERER = "https://multimovies.garden/";
+const REFERER = "https://m1.multimovies.courses/";
 
 const UA =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36";
