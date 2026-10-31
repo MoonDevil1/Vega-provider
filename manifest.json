@@ -11,7 +11,7 @@
   {
     "display_name": "Hindi IPTV",
     "value": "iptv",
-    "version": "1.0.2",
+    "version": "1.0.3",
     "icon": "https://cdn.jsdelivr.net/gh/MoonDevil1/Vega-providers@main/assets/iptv.svg",
     "type": "global",
     "hasSettings": false,
