@@ -41,10 +41,10 @@ const providerContext = {
   assert.equal((await getSearchPosts({ searchQuery: "serial", providerContext })).length, 1);
 
   const meta = await getMeta({ link: movies[0].link, providerContext });
-  assert.equal(meta.linkList[0].directLinks[0].link, movies[0].link);
-  const streams = await getStream({ link: movies[0].link, type: "movie", providerContext });
+  assert.equal(meta.linkList[0].directLinks[0].link, "https://streams.example/movie/index.m3u8");
+  const streams = await getStream({ link: meta.linkList[0].directLinks[0].link, type: "movie", providerContext });
   assert.equal(streams[0].type, "m3u8");
-  assert.equal(streams[0].link, movies[0].link);
+  assert.equal(streams[0].link, "https://streams.example/movie/index.m3u8");
   console.log("Hindi IPTV provider tests passed.");
 })().catch((error) => {
   console.error(error);
