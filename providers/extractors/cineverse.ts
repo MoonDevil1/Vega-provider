@@ -204,20 +204,43 @@ async function resolveProxyPage(
 /*  CINEVERSE EXTRACTOR                                                */
 /* ================================================================== */
 function parseModernServers(html: string, cheerio: any): ServerItem[] {
-  const out: ServerItem[] = []; const seen = new Set<string>();
-  try { const $ = cheerio.load(html); $(".srv-item[data-url]").each((_i: number, node: any) => {
-    const el = $(node); const platform = String(el.attr("data-platform") || "").trim();
-    const code = String(el.attr("data-code") || "").trim(); const raw = String(el.attr("data-url") || "").trim();
-    const name = String(el.attr("data-pname") || el.text() || platform || "Mirror").replace(/\s+/g, " ").trim();
-    if (!raw) return; let url = raw;
+  const out: ServerItem[] = [];
+  const seen = new Set<string>();
+  const add = (rawValue: string, platformValue: string, codeValue: string, nameValue: string) => {
+    const raw = String(rawValue || "").replace(/&amp;/g, "&").trim();
+    const platform = String(platformValue || "").trim();
+    const code = String(codeValue || "").trim();
+    const name = String(nameValue || platform || "Mirror").replace(/\s+/g, " ").trim();
+    if (!raw) return;
+    let url = raw;
     if (!/^https?:\/\//i.test(raw)) {
       if (raw.startsWith("/")) url = HUB + raw;
       else if (platform && code) url = HUB + "/proxy.php?p=" + encodeURIComponent(platform) + "&c=" + encodeURIComponent(code) + "&title=&site_ref=" + encodeURIComponent(REFERER_HUB) + "&noredirect=1";
       else return;
     }
-    if (seen.has(url)) return; seen.add(url);
+    if (seen.has(url)) return;
+    seen.add(url);
     out.push({ platform: platform || name.toLowerCase().replace(/\W+/g, ""), name, code: code || raw, url });
-  }); } catch {}
+  };
+  try {
+    const $ = cheerio.load(html);
+    $(".srv-item[data-url]").each((_i: number, node: any) => {
+      const el = $(node);
+      add(String(el.attr("data-url") || ""), String(el.attr("data-platform") || ""),
+        String(el.attr("data-code") || ""), String(el.attr("data-pname") || el.text() || ""));
+    });
+  } catch {}
+  // Nested HTML documents inside placeholder divs may be flattened by
+  // lightweight HTML parsers. Read server attributes directly as a fallback.
+  const tags = html.match(/<[^>]*\bclass\s*=\s*["'][^"']*\bsrv-item\b[^"']*["'][^>]*>/gi) || [];
+  const getAttr = (tag: string, key: string) => {
+    const match = tag.match(new RegExp("\\b" + key + "\\s*=\\s*(['\"])(.*?)\\1", "i"));
+    return match ? match[2] : "";
+  };
+  for (const tag of tags) {
+    add(getAttr(tag, "data-url"), getAttr(tag, "data-platform"),
+      getAttr(tag, "data-code"), getAttr(tag, "data-pname"));
+  }
   return out;
 }
 function extractDirectMedia(html: string, pageUrl: string): { url: string; type: string }[] {
