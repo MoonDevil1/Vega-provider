@@ -1,6 +1,6 @@
 import { Info, ProviderContext } from "../types";
 
-const CACHE_KEY = "iptv-org-in-hindi-v1";
+const CACHE_KEY = "iptv-org-in-hindi-v2";
 
 export const getMeta = async function ({
   link,
