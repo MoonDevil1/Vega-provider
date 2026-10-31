@@ -1,0 +1,1 @@
+"use strict";Object.defineProperty(exports,"__esModule",{value:true});exports.catalog=[{title:"Hindi Movies",filter:"movies"},{title:"Hindi Kids",filter:"kids"},{title:"Hindi Serials",filter:"serials"}];
