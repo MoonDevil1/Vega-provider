@@ -1,30 +1,49 @@
 import { Post, ProviderContext } from "../types";
 
 const STREAMS_URL = "https://raw.githubusercontent.com/iptv-org/iptv/master/streams/in.m3u";
-const CHANNELS_URL = "https://iptv-org.github.io/api/channels.json";
-const LOGOS_URL = "https://iptv-org.github.io/api/logos.json";
-const CACHE_KEY = "iptv-org-in-hindi-v4";
+const CACHE_KEY = "iptv-org-in-hindi-v5";
 const CACHE_TTL = 10 * 60 * 1000;
 
-type ChannelInfo = { id?: string; name?: string; alt_names?: string[]; categories?: string[] };
-type ChannelLogo = { channel?: string; url?: string; in_use?: boolean; format?: string; width?: number; height?: number };
-type ChannelEntry = { id: string; name: string; logo: string; url: string; group: string; language: string; info: ChannelInfo };
-
 const CATEGORY_IDS: Record<string, Set<string>> = {
-  movies: new Set([
-    "b4umovies.in", "goldmines.in", "goldmines2.in", "goldminesaction.in",
-    "goldminesbollywood.in", "goldminesmovies.in", "zeecinema.in", "colorscineplex.in",
-  ]),
-  kids: new Set([
-    "wowkidz.in", "epickids.in", "nickelodeon.in", "superhungama.in", "sonyyay.in",
-    "disneychannel.in", "hungamatv.in", "disneyjunior.in", "pogo.in",
-    "cartoonnetwork.in", "cartoonnetworkhdplus.in", "discoverykids.in", "greengoldtv.in",
-  ]),
-  serials: new Set([
-    "dangaltv.in", "dangal2.in", "ddnational.in", "epictv.in", "pasandtv.in",
-    "shemarooumang.in", "sonyentertainmenttelevision.in", "colors.in", "sonysab.in", "anmoltv.in",
-  ]),
+  movies: new Set(["b4umovies.in", "goldmines.in", "goldmines2.in", "goldminesaction.in", "goldminesbollywood.in", "goldminesmovies.in", "zeecinema.in", "colorscineplex.in"]),
+  kids: new Set(["wowkidz.in", "epickids.in", "nickelodeon.in", "superhungama.in", "sonyyay.in", "disneychannel.in", "hungamatv.in", "disneyjunior.in", "pogo.in", "cartoonnetwork.in", "cartoonnetworkhdplus.in", "discoverykids.in", "greengoldtv.in"]),
+  serials: new Set(["dangaltv.in", "dangal2.in", "ddnational.in", "epictv.in", "pasandtv.in", "shemarooumang.in", "sonyentertainmenttelevision.in", "colors.in", "sonysab.in", "anmoltv.in"]),
 };
+
+const LOGOS: Record<string, string> = {
+  "anmoltv.in": "https://dvdh7g0f0hwck.cloudfront.net/assets/images/channel/AnmolTV_Transparent_6e1b4782-0685-4ccd-bac0-436a0c0ea947.png",
+  "b4umovies.in": "https://dtil.tmsimg.com/assets/s140063_ld_h9_aa.png?lock=720x540",
+  "cartoonnetwork.in": "https://upload.wikimedia.org/wikipedia/commons/thumb/8/80/Cartoon_Network_2010_logo.svg/960px-Cartoon_Network_2010_logo.svg.png",
+  "cartoonnetworkhdplus.in": "https://xstreamcp-assets-msp.streamready.in/assets/LIVETV/LIVECHANNEL/LIVETV_LIVETVCHANNEL_CARTOON_NETWORK_HDSYMPLUS/images/LOGO_HD/image.png",
+  "colors.in": "https://dvdh7g0f0hwck.cloudfront.net/assets/images/channel/Colors_Transparent_16069908-8494-4eb4-bd40-5afca3969088.png",
+  "colorscineplex.in": "https://img10.hotstar.com/image/upload/f_auto/sources/r1/cms/prod/3042/1782291173042-h.jpg",
+  "dangal2.in": "https://i.imgur.com/BEr1r7L.png",
+  "dangaltv.in": "https://dtil.tmsimg.com/assets/s142771_ld_h9_aa.png?lock=720x540",
+  "ddnational.in": "https://dtil.tmsimg.com/assets/s158252_ld_h9_aa.png?lock=720x540",
+  "discoverykids.in": "https://ltsk-cdn.s3.eu-west-1.amazonaws.com/jumpstart/Temp_Live/cdn/HLS/Channel/transparentImages/Discovery%20Kids.png",
+  "disneychannel.in": "https://upload.wikimedia.org/wikipedia/commons/f/ff/2024_Disney_Channel_text_logo.svg",
+  "disneyjunior.in": "https://xstreamcp-assets-msp.streamready.in/assets/LIVETV/LIVECHANNEL/LIVETV_LIVETVCHANNEL_DISNEY_JUNIOR/images/LOGO_HD/image.png",
+  "epickids.in": "https://ltsk-cdn.s3.eu-west-1.amazonaws.com/jumpstart/Temp_Live/cdn/HLS/Channel/transparentImages/GUBARE_Poster-transparent.png",
+  "epictv.in": "https://ltsk-cdn.s3.eu-west-1.amazonaws.com/jumpstart/Temp_Live/cdn/HLS/Channel/transparentImages/Epic-LOGO_2000_X_1125_transpharent.png",
+  "goldmines.in": "https://dtil.tmsimg.com/assets/s143087_ld_h15_aa.png?lock=720x540",
+  "goldminesaction.in": "https://yt3.googleusercontent.com/_X6U6bMLF-pTu5wBMFwsSI6aubGrXk2B0kUKdGiLIMqFLyDIne4Ot4ro76BS1S8fX3pWcCwS=s900-c-k-c0x00ffffff-no-rj",
+  "goldminesbollywood.in": "https://i.imgur.com/6mNQ9mM.png",
+  "goldminesmovies.in": "https://dvdh7g0f0hwck.cloudfront.net/assets/images/channel/GoldminesMovies_Transparent_9b7db248-999e-4200-a459-6cc594650f3d.png",
+  "greengoldtv.in": "https://i.ibb.co/TDPsPVkT/Greengoldtv.png",
+  "hungamatv.in": "https://upload.wikimedia.org/wikipedia/commons/thumb/9/9c/Hungama_TV.svg/960px-Hungama_TV.svg.png",
+  "nickelodeon.in": "https://img10.hotstar.com/image/upload/f_auto/sources/r1/cms/prod/6807/1784039246807-h.jpg",
+  "pasandtv.in": "https://ltsk-cdn.s3.eu-west-1.amazonaws.com/jumpstart/Temp_Live/cdn/HLS/Channel/transparentImages/Pasand-Logo--transparent.png",
+  "pogo.in": "https://ltsk-cdn.s3.eu-west-1.amazonaws.com/jumpstart/Temp_Live/cdn/HLS/Channel/transparentImages/Pogo.png",
+  "shemarooumang.in": "https://dtil.tmsimg.com/assets/s143779_ld_h15_aa.png?lock=720x540",
+  "sonyentertainmenttelevision.in": "https://dtil.tmsimg.com/assets/s157589_ld_h15_aa.png?lock=720x540",
+  "sonysab.in": "https://dtil.tmsimg.com/assets/s159125_ld_h15_aa.png?lock=720x540",
+  "sonyyay.in": "https://dtil.tmsimg.com/assets/s159100_ld_h15_aa.png?lock=720x540",
+  "superhungama.in": "https://plain-apac-prod-public.komododecks.com/202609/07/lNjbGo0Rcgz3vhfoyTN7/image.png",
+  "wowkidz.in": "https://d229kpbsb5jevy.cloudfront.net/yupptvnew/content/common/channel/logos/mjvezt.png",
+  "zeecinema.in": "https://upload.wikimedia.org/wikipedia/commons/thumb/9/92/Zee_Cinema_2025.svg/960px-Zee_Cinema_2025.svg.png",
+};
+
+type ChannelEntry = { id: string; feed: string; name: string; logo: string; url: string };
 
 function attr(line: string, key: string): string {
   const match = line.match(new RegExp("(?:^|\\s)" + key + "=(?:\"([^\"]*)\"|'([^']*)')", "i"));
@@ -36,9 +55,11 @@ function canonicalId(id: string): string {
 function slug(value: string): string {
   return String(value || "channel").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "channel";
 }
-function parsePlaylist(text: string, channelMap: Record<string, ChannelInfo>, logoMap: Record<string, string>): ChannelEntry[] {
+function parsePlaylist(text: string): ChannelEntry[] {
   const entries: ChannelEntry[] = [];
+  const seenUrls = new Set<string>();
   let infoLine = "";
+  const regionalFeeds = new Set(["tamil", "telugu", "kannada", "malayalam", "marathi", "bangla", "bengali", "gujarati", "punjabi", "bhojpuri", "odia", "assamese", "nepali"]);
   for (const raw of text.replace(/^\uFEFF/, "").split(/\r?\n/)) {
     const line = raw.trim();
     if (!line) continue;
@@ -47,76 +68,43 @@ function parsePlaylist(text: string, channelMap: Record<string, ChannelInfo>, lo
     const comma = infoLine.lastIndexOf(",");
     const playlistName = (comma >= 0 ? infoLine.slice(comma + 1) : "").trim();
     const rawId = attr(infoLine, "tvg-id");
-    const tvgName = attr(infoLine, "tvg-name");
-    const id = canonicalId(rawId) || slug(tvgName || playlistName);
-    const info = channelMap[id] || {};
-    const name = String(tvgName || info.name || playlistName).replace(/\s*\([^)]*\)\s*$/, "").replace(/\s+\d{3,4}p$/i, "").trim();
-    if (name && id) {
-      const url = line;
-      // Keep every distinct source URL for a channel; getMeta exposes these as
-      // alternate streams instead of silently throwing away mirrors/qualities.
-      if (!entries.some((entry) => entry.id === id && entry.url === url)) {
-        entries.push({ id, name, logo: attr(infoLine, "tvg-logo") || logoMap[id] || "", url, group: attr(infoLine, "group-title"), language: attr(infoLine, "tvg-language"), info });
-      }
+    const id = canonicalId(rawId);
+    const feed = String(rawId.split("@")[1] || "").toLowerCase();
+    const name = String(attr(infoLine, "tvg-name") || playlistName).replace(/\s*\([^)]*\)\s*$/, "").replace(/\s+\d{3,4}p$/i, "").trim();
+    const url = line;
+    if (id && name && !regionalFeeds.has(feed) && CATEGORY_IDS_LOOKUP.has(id) && !seenUrls.has(url)) {
+      entries.push({ id, feed, name, logo: attr(infoLine, "tvg-logo") || LOGOS[id] || "", url });
+      seenUrls.add(url);
     }
     infoLine = "";
   }
   return entries;
 }
+const CATEGORY_IDS_LOOKUP = new Set(Object.values(CATEGORY_IDS).flatMap((ids) => Array.from(ids)));
+
 async function loadEntries(providerContext: ProviderContext): Promise<ChannelEntry[]> {
   const { axios, kvStore, commonHeaders = {} } = providerContext;
   try {
     const cached = await kvStore.get<{ savedAt: number; entries: ChannelEntry[] }>(CACHE_KEY);
     if (cached && Date.now() - cached.savedAt < CACHE_TTL && Array.isArray(cached.entries) && cached.entries.length) return cached.entries;
   } catch {}
-
-  const headers = { ...commonHeaders, "User-Agent": commonHeaders["User-Agent"] || "Mozilla/5.0 Vega-IPTV/1.2" };
-  const playlistResponse = await axios.get(STREAMS_URL, { headers: { ...headers, Accept: "text/plain,*/*" }, timeout: 30000, responseType: "text" });
-  const playlist = String(playlistResponse.data || "");
+  const response = await axios.get(STREAMS_URL, {
+    headers: { ...commonHeaders, Accept: "text/plain,*/*", "User-Agent": commonHeaders["User-Agent"] || "Mozilla/5.0 Vega-IPTV/1.3" },
+    timeout: 30000,
+    responseType: "text",
+  });
+  const playlist = String(response.data || "");
   if (!playlist.trim().startsWith("#EXTM3U")) throw new Error("IPTV source did not return an M3U playlist");
-
-  const channelMap: Record<string, ChannelInfo> = {};
-  try {
-    const response = await axios.get(CHANNELS_URL, { headers: { ...headers, Accept: "application/json" }, timeout: 20000 });
-    for (const channel of Array.isArray(response.data) ? response.data : []) {
-      if (channel && channel.id) channelMap[String(channel.id).toLowerCase()] = channel;
-    }
-  } catch (error) {
-    console.warn("[IPTV] Channel metadata unavailable; using curated channel IDs", error);
-  }
-
-  const logoMap: Record<string, string> = {};
-  try {
-    const response = await axios.get(LOGOS_URL, { headers: { ...headers, Accept: "application/json" }, timeout: 20000 });
-    const logos = Array.isArray(response.data) ? response.data as ChannelLogo[] : [];
-    for (const logo of logos) {
-      const id = String(logo.channel || "").toLowerCase();
-      if (!id || !logo.url || logo.in_use === false) continue;
-      const previous = logoMap[id];
-      if (!previous || (logo.format === "SVG") || (logo.width || 0) >= 100) logoMap[id] = logo.url;
-    }
-  } catch (error) {
-    console.warn("[IPTV] Optional logo metadata unavailable; continuing without logos", error);
-  }
-
-  const entries = parsePlaylist(playlist, channelMap, logoMap);
-  if (!entries.length) throw new Error("IPTV India playlist contained no usable channel entries");
+  const entries = parsePlaylist(playlist);
+  if (!entries.length) throw new Error("No curated Hindi movie, kids, or serial channels were found in the India playlist");
   try { await kvStore.set(CACHE_KEY, { savedAt: Date.now(), entries }); } catch {}
   return entries;
 }
 function toPost(entry: ChannelEntry): Post {
-  return {
-    title: entry.name,
-    link: "iptv://channel/" + encodeURIComponent(entry.id) + "?stream=" + encodeURIComponent(entry.url),
-    image: entry.logo,
-    provider: "iptv",
-    tag: "LIVE",
-    cornerTag: "LIVE",
-  };
+  return { title: entry.name, link: "iptv://channel/" + encodeURIComponent(entry.id) + "?stream=" + encodeURIComponent(entry.url), image: entry.logo, provider: "iptv", tag: "LIVE", cornerTag: "LIVE" };
 }
 export const getPosts = async function ({ filter, providerContext }: { filter: string; page?: number; providerValue?: string; signal?: AbortSignal; providerContext: ProviderContext }): Promise<Post[]> {
-  const category = String(filter || "").toLowerCase();
-  const allowed = CATEGORY_IDS[category];
+  const allowed = CATEGORY_IDS[String(filter || "").toLowerCase()];
   if (!allowed) return [];
   const entries = await loadEntries(providerContext);
   const seen = new Set<string>();
@@ -131,6 +119,6 @@ export const getSearchPosts = async function ({ searchQuery, providerContext }: 
   if (!query) return [];
   const entries = await loadEntries(providerContext);
   const seen = new Set<string>();
-  return entries.filter((entry) => Object.values(CATEGORY_IDS).some((ids) => ids.has(entry.id)) && entry.name.toLowerCase().includes(query))
+  return entries.filter((entry) => CATEGORY_IDS_LOOKUP.has(entry.id) && entry.name.toLowerCase().includes(query))
     .filter((entry) => { if (seen.has(entry.id)) return false; seen.add(entry.id); return true; }).map(toPost);
 };
