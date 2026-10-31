@@ -1,15 +1,8 @@
 import { Info, ProviderContext } from "../types";
 
-const CACHE_KEY = "iptv-org-in-hindi-v3";
+const CACHE_KEY = "iptv-org-in-hindi-v4";
 
-export const getMeta = async function ({
-  link,
-  providerContext,
-}: {
-  link: string;
-  provider?: string;
-  providerContext: ProviderContext;
-}): Promise<Info> {
+export const getMeta = async function ({ link, providerContext }: { link: string; provider?: string; providerContext: ProviderContext }): Promise<Info> {
   let title = "Live TV";
   let image = "";
   let directLinks: { title: string; link: string; type: "movie" }[] = [];
@@ -39,13 +32,5 @@ export const getMeta = async function ({
     try { title = new URL(rawLink).hostname.replace(/^www\./, ""); } catch {}
   }
   if (title === "Live TV" && id) title = id.replace(/\.in$/i, "").replace(/[._-]+/g, " ");
-
-  return {
-    title,
-    synopsis: "Live channel from the public iptv-org India playlist. Stream availability depends on the broadcaster and may vary by region.",
-    image,
-    imdbId: "",
-    type: "movie",
-    linkList: [{ title: "Live", quality: "Auto", directLinks }],
-  };
+  return { title, synopsis: "Live channel from the public iptv-org India playlist. Multiple listed mirrors are available where supplied. Stream availability may vary by region.", image, imdbId: "", type: "movie", linkList: [{ title: "Live", quality: "Auto", directLinks }] };
 };
