@@ -7,7 +7,7 @@ exports.getMeta = async function ({ link, providerContext }) {
     let id = "";
     try { id = decodeURIComponent(channelPart); } catch { id = channelPart; }
     try {
-        const cached = await providerContext.kvStore.get("iptv-org-in-hindi-v4");
+        const cached = await providerContext.kvStore.get("iptv-org-in-hindi-v5");
         const matches = cached && Array.isArray(cached.entries) ? cached.entries.filter((entry) => entry.id === id) : [];
         if (matches.length) {
             title = matches[0].name || title;
@@ -24,5 +24,5 @@ exports.getMeta = async function ({ link, providerContext }) {
         try { title = new URL(rawLink).hostname.replace(/^www\./, ""); } catch { }
     }
     if (title === "Live TV" && id) title = id.replace(/\.in$/i, "").replace(/[._-]+/g, " ");
-    return { title, synopsis: "Live channel from the public iptv-org India playlist. Multiple listed mirrors are available where supplied. Stream availability may vary by region.", image, imdbId: "", type: "movie", linkList: [{ title: "Live", quality: "Auto", directLinks }] };
+    return { title, synopsis: "Live channel from the public iptv-org India playlist. All distinct listed Hindi-category mirrors are retained. Availability can vary by region.", image, imdbId: "", type: "movie", linkList: [{ title: "Live", quality: "Auto", directLinks }] };
 };
