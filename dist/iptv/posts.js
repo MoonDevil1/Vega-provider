@@ -3,8 +3,8 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.getPosts = getPosts;
 exports.getSearchPosts = getSearchPosts;
 const STREAMS_URL = "https://raw.githubusercontent.com/iptv-org/iptv/master/streams/in.m3u";
-const CACHE_KEY = "iptv-org-in-hindi-v5";
-const CACHE_TTL = 600000;
+const CACHE_KEY = "iptv-org-in-hindi-v6";
+const CACHE_TTL = 5 * 60 * 1000;
 const CATEGORY_IDS = {
     movies: new Set(["b4umovies.in", "goldmines.in", "goldmines2.in", "goldminesaction.in", "goldminesbollywood.in", "goldminesmovies.in", "zeecinema.in", "colorscineplex.in"]),
     kids: new Set(["wowkidz.in", "epickids.in", "nickelodeon.in", "superhungama.in", "sonyyay.in", "disneychannel.in", "hungamatv.in", "disneyjunior.in", "pogo.in", "cartoonnetwork.in", "cartoonnetworkhdplus.in", "discoverykids.in", "greengoldtv.in"]),
@@ -44,32 +44,65 @@ const LOGOS = {
 };
 const CATEGORY_IDS_LOOKUP = new Set(Object.values(CATEGORY_IDS).flatMap((ids) => Array.from(ids)));
 function attr(line, key) {
-    const match = line.match(new RegExp("(?:^|\\s)" + key + "=(?:\"([^\"]*)\"|'([^']*)')", "i"));
+    const match = line.match(new RegExp("(?:^|\\s)" + key + "=(?:\\"([^\\"]*)\\"|'([^']*)')", "i"));
     return match ? String(match[1] || match[2] || "").trim() : "";
 }
 function canonicalId(id) { return String(id || "").trim().split("@")[0].toLowerCase(); }
-function slug(value) { return String(value || "channel").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "channel"; }
+function parseHeaderOptions(lines) {
+    const headers = {};
+    for (const line of lines) {
+        if (line.startsWith("#EXTVLCOPT:")) {
+            const option = line.slice("#EXTVLCOPT:".length);
+            const split = option.indexOf("=");
+            if (split < 1) continue;
+            const key = option.slice(0, split).toLowerCase();
+            const value = option.slice(split + 1).replace(/^#EXTVLCOPT:[^=]+=+/i, "").trim();
+            if (!value) continue;
+            if (key === "http-user-agent") headers["User-Agent"] = value;
+            else if (key === "http-referrer" || key === "http-referer") headers["Referer"] = value;
+            else if (key === "http-origin") headers["Origin"] = value;
+            else if (key === "http-cookie") headers["Cookie"] = value;
+        }
+        else if (line.startsWith("#EXTHTTP:")) {
+            try {
+                const parsed = JSON.parse(line.slice("#EXTHTTP:".length));
+                if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+                    for (const [key, value] of Object.entries(parsed)) if (typeof value === "string" && value.trim()) headers[key] = value;
+                }
+            }
+            catch { }
+        }
+    }
+    return headers;
+}
 function parsePlaylist(text) {
-    const entries = [], seenUrls = new Set();
-    let infoLine = "";
+    const entries = [];
+    const seenUrls = new Set();
     const regionalFeeds = new Set(["tamil", "telugu", "kannada", "malayalam", "marathi", "bangla", "bengali", "gujarati", "punjabi", "bhojpuri", "odia", "assamese", "nepali"]);
-    for (const raw of text.replace(/^\uFEFF/, "").split(/\r?\n/)) {
+    let infoLine = "";
+    let optionLines = [];
+    for (const raw of text.replace(/^\\uFEFF/, "").split(/\\r?\\n/)) {
         const line = raw.trim();
         if (!line) continue;
-        if (line.startsWith("#EXTINF:")) { infoLine = line; continue; }
-        if (line.startsWith("#") || !/^https?:\/\//i.test(line) || !infoLine) continue;
+        if (line.startsWith("#EXTINF:")) { infoLine = line; optionLines = []; continue; }
+        if (line.startsWith("#EXTVLCOPT:") || line.startsWith("#EXTHTTP:")) { if (infoLine) optionLines.push(line); continue; }
+        if (line.startsWith("#") || !/^https?:\\/\\//i.test(line) || !infoLine) continue;
         const comma = infoLine.lastIndexOf(",");
         const playlistName = (comma >= 0 ? infoLine.slice(comma + 1) : "").trim();
         const rawId = attr(infoLine, "tvg-id");
         const id = canonicalId(rawId);
         const feed = String(rawId.split("@")[1] || "").toLowerCase();
-        const name = String(attr(infoLine, "tvg-name") || playlistName).replace(/\s*\([^)]*\)\s*$/, "").replace(/\s+\d{3,4}p$/i, "").trim();
+        const rawName = attr(infoLine, "tvg-name") || playlistName;
+        const name = String(rawName).replace(/\\s*\\[[^\\]]*(?:geo-blocked|not 24\\/7)[^\\]]*\\]/ig, "").replace(/\\s*\\([^)]*\\)\\s*$/, "").replace(/\\s+\\d{3,4}p$/i, "").trim();
         const url = line;
-        if (id && name && !regionalFeeds.has(feed) && CATEGORY_IDS_LOOKUP.has(id) && !seenUrls.has(id + "|" + url)) {
-            entries.push({ id, feed, name, logo: attr(infoLine, "tvg-logo") || LOGOS[id] || "", url });
+        const headers = parseHeaderOptions(optionLines);
+        const blocked = /\\[(?:geo-blocked|not 24\\/7)\\]/i.test(infoLine);
+        if (id && name && !blocked && !regionalFeeds.has(feed) && CATEGORY_IDS_LOOKUP.has(id) && !seenUrls.has(id + "|" + url)) {
+            entries.push({ id, feed, name, logo: attr(infoLine, "tvg-logo") || LOGOS[id] || "", url, headers });
             seenUrls.add(id + "|" + url);
         }
         infoLine = "";
+        optionLines = [];
     }
     return entries;
 }
@@ -78,28 +111,40 @@ async function loadEntries(providerContext) {
     try {
         const cached = await kvStore.get(CACHE_KEY);
         if (cached && Date.now() - cached.savedAt < CACHE_TTL && Array.isArray(cached.entries) && cached.entries.length) return cached.entries;
-    } catch { }
-    const response = await axios.get(STREAMS_URL, { headers: { ...commonHeaders, Accept: "text/plain,*/*", "User-Agent": commonHeaders["User-Agent"] || "Mozilla/5.0 Vega-IPTV/1.3" }, timeout: 30000, responseType: "text" });
+    }
+    catch { }
+    const response = await axios.get(STREAMS_URL, {
+        headers: { ...commonHeaders, Accept: "text/plain,*/*", "User-Agent": commonHeaders["User-Agent"] || "Mozilla/5.0 Vega-IPTV/1.4" },
+        timeout: 30000,
+        responseType: "text",
+    });
     const playlist = String(response.data || "");
     if (!playlist.trim().startsWith("#EXTM3U")) throw new Error("IPTV source did not return an M3U playlist");
     const entries = parsePlaylist(playlist);
     if (!entries.length) throw new Error("No curated Hindi movie, kids, or serial channels were found in the India playlist");
-    try { await kvStore.set(CACHE_KEY, { savedAt: Date.now(), entries }); } catch { }
+    try { await kvStore.set(CACHE_KEY, { savedAt: Date.now(), entries }); }
+    catch { }
     return entries;
 }
+function encodeStreamUrl(url, headers) {
+    return Object.keys(headers).length ? url + "#vega_headers=" + encodeURIComponent(JSON.stringify(headers)) : url;
+}
 function toPost(entry) {
-    return { title: entry.name, link: "iptv://channel/" + encodeURIComponent(entry.id) + "?stream=" + encodeURIComponent(entry.url), image: entry.logo, provider: "iptv", tag: "LIVE", cornerTag: "LIVE" };
+    const stream = encodeStreamUrl(entry.url, entry.headers);
+    return { title: entry.name, link: "iptv://channel/" + encodeURIComponent(entry.id) + "?stream=" + encodeURIComponent(stream), image: entry.logo, provider: "iptv", tag: "LIVE", cornerTag: "LIVE" };
 }
 async function getPosts({ filter, providerContext }) {
     const allowed = CATEGORY_IDS[String(filter || "").toLowerCase()];
     if (!allowed) return [];
-    const entries = await loadEntries(providerContext), seen = new Set();
+    const entries = await loadEntries(providerContext);
+    const seen = new Set();
     return entries.filter((entry) => { if (!allowed.has(entry.id) || seen.has(entry.id)) return false; seen.add(entry.id); return true; }).map(toPost);
 }
 async function getSearchPosts({ searchQuery, providerContext }) {
     const query = String(searchQuery || "").trim().toLowerCase();
     if (!query) return [];
-    const entries = await loadEntries(providerContext), seen = new Set();
+    const entries = await loadEntries(providerContext);
+    const seen = new Set();
     return entries.filter((entry) => CATEGORY_IDS_LOOKUP.has(entry.id) && entry.name.toLowerCase().includes(query))
         .filter((entry) => { if (seen.has(entry.id)) return false; seen.add(entry.id); return true; }).map(toPost);
 }
