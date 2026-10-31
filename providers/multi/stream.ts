@@ -5,7 +5,7 @@ import { vidboltExtractor } from "../extractors/vidbolt";
 import { cineverseExtractor } from "../extractors/cineverse";
 
 
-const REFERER = "https://multimovies.garden/";
+const REFERER = "https://m1.multimovies.courses/";
 
 const BASE_HEADERS: Record<string, string> = {
   Accept:
