@@ -6,7 +6,7 @@ import { iqstExtractor } from "./iqst";
 /*  Constants                                                          */
 /* ================================================================== */
 const HUB = "https://rozgarlelo.modiplay.xyz";
-const REFERER_HUB = "https://multimovies.garden/";
+const REFERER_HUB = "https://m1.multimovies.courses/";
 
 const MOBILE_UA =
   "Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/154.0.0.0 Mobile Safari/537.36";
