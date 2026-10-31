@@ -71,14 +71,14 @@ This means the app itself is not the primary issue when a show shows posts but n
 
 ## Hindi IPTV
 
-The **Hindi IPTV** provider filters the complete public iptv-org India M3U playlist against a curated set of Hindi entertainment channel IDs.
+The **Hindi IPTV** provider scrapes the public iptv-org India M3U playlist and filters it against curated Hindi entertainment channel IDs.
 
 Categories:
 - Hindi Movies
 - Hindi Kids
 - Hindi Serials
 
-The playlist is parsed once and cached for 10 minutes. Every distinct listed stream URL for each selected channel is retained as an alternate stream, while explicitly regional-language feeds (for example Tamil and Telugu variants) are excluded. Channel logos are bundled from the iptv-org logo catalogue, so startup does not need to download the large global channel and logo metadata files.
+The provider scrapes the live India M3U playlist, parses each EXTINF channel record, language/feed suffix, logo and every listed stream URL, then filters against curated Hindi channel IDs. Explicit regional-language feeds (for example Tamil and Telugu), geo-blocked entries and entries marked not 24/7 are excluded. Playlist entries are cached for five minutes. Logos are mapped locally to the channel IDs, so startup does not need to download the full global channel/logo databases. It also reads EXTHTTP and EXT VlcOpt user-agent, referer, origin and cookie headers and passes them through to Vega's player.
 
 Playback returns the selected original HLS/DASH/MP4 URL to Vega's existing player; it does not embed a replacement player.
 
