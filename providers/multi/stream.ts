@@ -25,8 +25,8 @@ const FILMU_RE     = /embed\.filmu\.in\//i;
 /* Per-server timeouts (ms). Fast ones get short budgets. */
 const TIMEOUTS: Record<string, number> = {
   Cineverse: 16000,
-  IQST: 18000,
-  "GD mirror": 18000,
+  IQST: 22000,
+  "GD mirror": 22000,
   VIDOUT: 10000,
   Filmu: 12000,
   VidBolt: 12000,
@@ -601,13 +601,13 @@ export async function getStream({
   await Promise.race([
     Promise.all(trackedJobs),
     new Promise<void>((resolve) => {
-      deadlineTimer = setTimeout(resolve, 20000);
+      deadlineTimer = setTimeout(resolve, 24000);
     }),
   ]);
   if (deadlineTimer) clearTimeout(deadlineTimer);
   const settled = completed;
   if (completedCount < jobs.length) {
-    console.warn("[stream] returning partial results after 20000ms (" + completedCount + "/" + jobs.length + " servers finished)");
+    console.warn("[stream] returning partial results after 24000ms (" + completedCount + "/" + jobs.length + " servers finished)");
   }
 
   // 4) Merge
