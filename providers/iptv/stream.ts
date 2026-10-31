@@ -9,13 +9,9 @@ export const getStream = async function ({
   providerContext: ProviderContext;
   isDownload?: boolean;
 }): Promise<Stream[]> {
-  if (!/^https?:\\/\\//i.test(String(link || ""))) return [];
-  const lower = link.toLowerCase().split("?")[0];
+  const value = String(link || "");
+  if (!(value.startsWith("https://") || value.startsWith("http://"))) return [];
+  const lower = value.toLowerCase().split("?")[0];
   const mediaType = lower.endsWith(".mpd") ? "mpd" : lower.endsWith(".mp4") ? "mp4" : "m3u8";
-  return [{
-    server: "IPTV • Direct",
-    link,
-    type: mediaType,
-    quality: "Auto",
-  }];
+  return [{ server: "IPTV • Direct", link: value, type: mediaType, quality: "Auto" }];
 };
