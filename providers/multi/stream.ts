@@ -24,13 +24,13 @@ const FILMU_RE     = /embed\.filmu\.in\//i;
 
 /* Per-server timeouts (ms). Fast ones get short budgets. */
 const TIMEOUTS: Record<string, number> = {
-  Cineverse: 8000,
-  IQST: 10000,
-  "GD mirror": 8000,
-  VIDOUT: 5000,
-  Filmu: 8000,
-  VidBolt: 8000,
-  default: 8000,
+  Cineverse: 16000,
+  IQST: 18000,
+  "GD mirror": 18000,
+  VIDOUT: 10000,
+  Filmu: 12000,
+  VidBolt: 12000,
+  default: 12000,
 };
 
 
@@ -378,8 +378,11 @@ async function routeServer(
   mediaType: MediaType,
   signal: AbortSignal,
   ctx: ProviderContext,
+  parentPageUrl: string,
 ): Promise<Stream[]> {
-  const h = BASE_HEADERS;
+  let parentReferer = BASE_HEADERS.Referer;
+  try { parentReferer = new URL(parentPageUrl).origin + "/"; } catch {}
+  const h = { ...BASE_HEADERS, Referer: parentReferer };
 
   if (CINEVERSE_RE.test(url)) {
     return cineverseExtractor(url, signal, ctx.axios, ctx.cheerio, h, ctx);
@@ -391,7 +394,8 @@ async function routeServer(
     return vidboltExtractor(url, signal, ctx.axios, ctx.cheerio, h, ctx);
   }
   if (VIDOUT_RE.test(url)) {
-    return resolveVidout(url, mediaType, signal, ctx);
+    const resolved = await resolveVidout(url, mediaType, signal, ctx);
+    return resolved.length ? resolved : resolvePublicEmbed(url, signal, ctx);
   }
   if (FILMU_RE.test(url)) {
     return resolveFilmu(url, mediaType, signal, ctx);
@@ -565,7 +569,7 @@ export async function getStream({
         const direct = directMediaStream(server.url, server.name);
         return direct.length > 0
           ? Promise.resolve(direct)
-          : routeServer(server.url, mediaType, innerSignal, providerContext);
+          : routeServer(server.url, mediaType, innerSignal, providerContext, pageUrl);
       },
       budget,
       server.name,
@@ -597,13 +601,13 @@ export async function getStream({
   await Promise.race([
     Promise.all(trackedJobs),
     new Promise<void>((resolve) => {
-      deadlineTimer = setTimeout(resolve, 9000);
+      deadlineTimer = setTimeout(resolve, 20000);
     }),
   ]);
   if (deadlineTimer) clearTimeout(deadlineTimer);
   const settled = completed;
   if (completedCount < jobs.length) {
-    console.warn("[stream] returning partial results after 9000ms (" + completedCount + "/" + jobs.length + " servers finished)");
+    console.warn("[stream] returning partial results after 20000ms (" + completedCount + "/" + jobs.length + " servers finished)");
   }
 
   // 4) Merge
