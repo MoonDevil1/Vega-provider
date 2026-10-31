@@ -484,45 +484,74 @@ async function resolveEmbedMedia(
   pageUrl: string, axios: any, headers: Record<string, string>,
   signal?: AbortSignal, depth: number = 0, seen: Record<string, boolean> = {},
 ): Promise<Stream[]> {
-  if (depth > 3 || seen[pageUrl]) return [];
+  if (depth > 4 || seen[pageUrl]) return [];
   seen[pageUrl] = true;
   let html = "";
   try {
     const origin = new URL(pageUrl).origin;
     const response = await axios.get(pageUrl, {
       headers: Object.assign({}, headers, { Referer: origin + "/" }),
-      signal, timeout: 7000, maxRedirects: 4,
+      signal, timeout: 9000, maxRedirects: 4,
     });
     html = typeof response.data === "string" ? response.data : JSON.stringify(response.data || "");
   } catch (e: any) {
     console.log("[iqst] embed fallback fetch failed: " + (e && e.message));
     return [];
   }
+
   const decoded = deEscape(html).replace(/&amp;/g, "&")
     .replace(/\\u0026/g, "&").replace(/\\u003d/g, "=");
-  const mediaRe = /https?:\/\/[^"'\s<>\\]+?\.(?:m3u8|mp4|m4v)(?:\?[^"'\s<>\\]*)?/gi;
-  const found: Stream[] = [];
   const subtitles = extractSubtitleTracks(html, pageUrl);
+  const found: Stream[] = [];
   const mediaSeen: Record<string, boolean> = {};
-  let match: RegExpExecArray | null;
-  while ((match = mediaRe.exec(decoded)) !== null) {
-    const mediaUrl = match[0].replace(/\\\\/g, "");
-    if (mediaSeen[mediaUrl]) continue;
+  const addMedia = (raw: string, referer: string) => {
+    const mediaUrl = deEscape(String(raw || "").trim()).replace(/\\\\/g, "");
+    if (!/^https?:\\/\\//i.test(mediaUrl) || mediaSeen[mediaUrl]) return;
+    if (!/\\.(?:m3u8|mp4|m4v)(?:[?#]|$)/i.test(mediaUrl)) return;
     mediaSeen[mediaUrl] = true;
-    found.push({ server: "IQSmart direct", link: mediaUrl,
-      type: /\\.(mp4|m4v)(?:[?#]|$)/i.test(mediaUrl) ? "mp4" : "m3u8", ...(subtitles.length ? { subtitles } : {}) });
+    found.push({
+      server: "IQSmart direct",
+      link: mediaUrl,
+      type: /\\.(?:mp4|m4v)(?:[?#]|$)/i.test(mediaUrl) ? "mp4" : "m3u8",
+      headers: { "User-Agent": headers["User-Agent"] || UA, Referer: referer },
+      ...(subtitles.length ? { subtitles } : {}),
+    });
+  };
+
+  // Some GD mirror pages are packed with Dean Edwards' JS rather than
+  // exposing a literal HLS URL in the document.
+  const host = hostOf(pageUrl);
+  if (KNOWN_XVID_HOSTS[host]) {
+    const unpacked = unpackJs(decoded) || "";
+    if (unpacked) {
+      const links = extractLinks(unpacked, new URL(pageUrl).origin);
+      for (const link of links) addMedia(link, new URL(pageUrl).origin + "/");
+      if (found.length) return found;
+    }
   }
+
+  const mediaRe = /https?:\\/\\/[^"'\\s<>\\\\]+?\\.(?:m3u8|mp4|m4v)(?:\\?[^"'\\s<>\\\\]*)?/gi;
+  let match: RegExpExecArray | null;
+  while ((match = mediaRe.exec(decoded)) !== null) addMedia(match[0], new URL(pageUrl).origin + "/");
   if (found.length) return found;
-  if (depth >= 3) return [];
-  const frameRe = /<(?:iframe|source|a)\b[^>]*\b(?:src|data-src|data-link)\s*=\s*["']([^"']+)["']/gi;
+  if (depth >= 4) return [];
+
+  // Current IQSmart pages publish mirrors as <li data-link="..."> and
+  // sometimes place the next player URL on a div's src attribute. Include
+  // those elements; the old iframe-only walk missed the new server list.
+  const frameRe = /<(?:iframe|source|a|button|div|li)\b[^>]*\b(?:src|data-src|data-link|data-url|href)\s*=\s*["']([^"']+)["']/gi;
   const frames: string[] = [];
-  while ((match = frameRe.exec(html)) !== null) {
+  while ((match = frameRe.exec(decoded)) !== null) {
     try {
       const frameUrl = new URL(match[1].replace(/&amp;/g, "&"), pageUrl).toString();
-      if (/^https?:/i.test(frameUrl) && !seen[frameUrl] && frames.indexOf(frameUrl) < 0) frames.push(frameUrl);
+      const frameHost = hostOf(frameUrl);
+      if (/^https?:/i.test(frameUrl) && !seen[frameUrl] &&
+          (KNOWN_XVID_HOSTS[frameHost] || /iqsmartgames|rpmhub|p2pplay|uns\\.bio|hanerix|morencius|vibuxer|n1mwq/i.test(frameHost) ||
+           /\\/evid\\//i.test(frameUrl)) &&
+          frames.indexOf(frameUrl) < 0) frames.push(frameUrl);
     } catch {}
   }
-  for (let i = 0; i < Math.min(frames.length, 6); i++) {
+  for (let i = 0; i < Math.min(frames.length, 8); i++) {
     const nested = await resolveEmbedMedia(frames[i], axios, headers, signal, depth + 1, seen);
     if (nested.length) return nested;
   }
@@ -543,7 +572,7 @@ export async function iqstExtractor(
   try {
     console.log("[iqst] -> " + link);
 
-    const headers = buildHeaders();
+    const headers = Object.assign({}, buildHeaders(), _headers || {});
 
     /* 1. File slugs */
     const files = await fetchFiles(link, axios, headers, signal);
