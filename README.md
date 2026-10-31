@@ -68,3 +68,20 @@ Important rules:
 - Do not rely on a format that works only in mobile; the same provider must satisfy the desktop contract.
 
 This means the app itself is not the primary issue when a show shows posts but not episodes. The provider must return the proper `linkList` and episode module structure for the desktop runtime.
+
+
+## Hindi IPTV
+
+The **Hindi IPTV** provider adds live channels from the public [iptv-org/iptv](https://github.com/iptv-org/iptv) project.
+
+Categories:
+- Hindi Movies
+- Hindi Kids
+- Hindi Serials
+
+Channel names, logos and stream entries are refreshed from the public iptv-org channel API and India M3U playlist, with a 10-minute provider cache. Playback returns the original HLS/DASH/MP4 URL to Vega's existing player; it does not embed a replacement player.
+
+Install/refresh the repository URL in Vega:
+`https://github.com/MoonDevil1/Vega-providers`
+
+**Availability notice:** community playlist entries can change, go offline, or be region-restricted. This provider only surfaces entries listed by iptv-org; it does not guarantee every stream will play in every country. Logo metadata is supplied by the iptv-org channel database.
