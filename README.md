@@ -1,4 +1,4 @@
-# Vega Provider: MultiMovies (v1.5.6)
+# Vega Provider: MultiMovies (v1.5.9)
 
 Community provider extension for Vega App.
 
