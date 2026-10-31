@@ -81,22 +81,22 @@ function parsePlaylist(text) {
     const regionalFeeds = new Set(["tamil", "telugu", "kannada", "malayalam", "marathi", "bangla", "bengali", "gujarati", "punjabi", "bhojpuri", "odia", "assamese", "nepali"]);
     let infoLine = "";
     let optionLines = [];
-    for (const raw of text.replace(/^\\uFEFF/, "").split(/\\r?\\n/)) {
+    for (const raw of text.replace(/^\uFEFF/, "").split(/\r?\n/)) {
         const line = raw.trim();
         if (!line) continue;
         if (line.startsWith("#EXTINF:")) { infoLine = line; optionLines = []; continue; }
         if (line.startsWith("#EXTVLCOPT:") || line.startsWith("#EXTHTTP:")) { if (infoLine) optionLines.push(line); continue; }
-        if (line.startsWith("#") || !/^https?:\\/\\//i.test(line) || !infoLine) continue;
+        if (line.startsWith("#") || !/^https?:\/\//i.test(line) || !infoLine) continue;
         const comma = infoLine.lastIndexOf(",");
         const playlistName = (comma >= 0 ? infoLine.slice(comma + 1) : "").trim();
         const rawId = attr(infoLine, "tvg-id");
         const id = canonicalId(rawId);
         const feed = String(rawId.split("@")[1] || "").toLowerCase();
         const rawName = attr(infoLine, "tvg-name") || playlistName;
-        const name = String(rawName).replace(/\\s*\\[[^\\]]*(?:geo-blocked|not 24\\/7)[^\\]]*\\]/ig, "").replace(/\\s*\\([^)]*\\)\\s*$/, "").replace(/\\s+\\d{3,4}p$/i, "").trim();
+        const name = String(rawName).replace(/\s*\[[^\]]*(?:geo-blocked|not 24\/7)[^\]]*\]/ig, "").replace(/\s*\([^)]*\)\s*$/, "").replace(/\s+\d{3,4}p$/i, "").trim();
         const url = line;
         const headers = parseHeaderOptions(optionLines);
-        const blocked = /\\[(?:geo-blocked|not 24\\/7)\\]/i.test(infoLine);
+        const blocked = /\[(?:geo-blocked|not 24\/7)\]/i.test(infoLine);
         if (id && name && !blocked && !regionalFeeds.has(feed) && CATEGORY_IDS_LOOKUP.has(id) && !seenUrls.has(id + "|" + url)) {
             entries.push({ id, feed, name, logo: attr(infoLine, "tvg-logo") || LOGOS[id] || "", url, headers });
             seenUrls.add(id + "|" + url);
