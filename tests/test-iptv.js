@@ -12,6 +12,8 @@ const playlist = [
   "https://streams.example/b4u/two.m3u8",
   '#EXTINF:-1 tvg-id="Pogo.in@SD",Pogo (576p)',
   "https://streams.example/pogo/index.m3u8",
+  '#EXTINF:-1 tvg-id="EpicKids.in@Digital",Epic Kids Digital (1080p)',
+  "https://streams.example/epickids/index.m3u8",
   '#EXTINF:-1 tvg-id="WOWKidz.in@Hindi",WOW Kidz (720p)',
   "https://streams.example/wow/hindi.m3u8",
   '#EXTINF:-1 tvg-id="WOWKidz.in@Telugu",WOW Kidz Telugu (720p)',
@@ -43,10 +45,11 @@ const providerContext = {
   const kids = await getPosts({ filter: "kids", providerContext });
   const serials = await getPosts({ filter: "serials", providerContext });
   assert.equal(movies.length, 1);
-  assert.equal(kids.length, 2);
+  assert.equal(kids.length, 3);
   assert.equal(serials.length, 1);
   assert.equal(movies[0].image, "https://dtil.tmsimg.com/assets/s140063_ld_h9_aa.png?lock=720x540");
   assert.equal(kids.some((post) => post.title.includes("Telugu")), false);
+  assert.equal(kids.find((post) => post.title.includes("Epic Kids")).image, "https://upload.wikimedia.org/wikipedia/en/1/19/Epic-Kids.png");
   assert.equal((await getSearchPosts({ searchQuery: "dangal", providerContext })).length, 1);
   assert.equal((await getSearchPosts({ searchQuery: "colors", providerContext })).length, 0);
   assert.equal(playlistFetches, 1, "playlist should be scraped once and reused from cache");
