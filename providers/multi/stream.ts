@@ -494,9 +494,16 @@ export async function getStream({
   try {
     let pageReferer = REFERER;
   try { pageReferer = new URL(link).origin + "/"; } catch {}
+  const requestHeaders = {
+    ...BASE_HEADERS,
+    ...(providerContext.commonHeaders || {}),
+    Referer: pageReferer,
+  };
   const res = await axios.get(link, {
-    headers: { ...BASE_HEADERS, Referer: pageReferer },
+    headers: requestHeaders,
     signal,
+    timeout: 18000,
+    maxRedirects: 5,
   });
     html = res.data;
   } catch (e: any) {
