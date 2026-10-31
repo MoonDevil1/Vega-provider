@@ -9,8 +9,8 @@ export const getMeta = async function ({
 }): Promise<Info> {
   let title = "Live TV";
   try {
-    const url = new URL(link);
-    title = decodeURIComponent(url.hostname.replace(/^www\\./, ""));
+    const hostname = new URL(link).hostname;
+    title = decodeURIComponent(hostname.startsWith("www.") ? hostname.slice(4) : hostname);
   } catch {}
   return {
     title,
@@ -18,10 +18,6 @@ export const getMeta = async function ({
     image: "",
     imdbId: "",
     type: "movie",
-    linkList: [{
-      title: "Live",
-      quality: "Auto",
-      directLinks: [{ title: "Watch Live", link, type: "movie" }],
-    }],
+    linkList: [{ title: "Live", quality: "Auto", directLinks: [{ title: "Watch Live", link, type: "movie" }] }],
   };
 };
