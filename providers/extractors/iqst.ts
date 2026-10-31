@@ -505,14 +505,14 @@ async function resolveEmbedMedia(
   const found: Stream[] = [];
   const mediaSeen: Record<string, boolean> = {};
   const addMedia = (raw: string, referer: string) => {
-    const mediaUrl = deEscape(String(raw || "").trim()).replace(/\\\\/g, "");
-    if (!/^https?:\\/\\//i.test(mediaUrl) || mediaSeen[mediaUrl]) return;
-    if (!/\\.(?:m3u8|mp4|m4v)(?:[?#]|$)/i.test(mediaUrl)) return;
+    const mediaUrl = deEscape(String(raw || "").trim()).replace(/\\/g, "");
+    if (!/^https?:\/\//i.test(mediaUrl) || mediaSeen[mediaUrl]) return;
+    if (!/\.(?:m3u8|mp4|m4v)(?:[?#]|$)/i.test(mediaUrl)) return;
     mediaSeen[mediaUrl] = true;
     found.push({
       server: "IQSmart direct",
       link: mediaUrl,
-      type: /\\.(?:mp4|m4v)(?:[?#]|$)/i.test(mediaUrl) ? "mp4" : "m3u8",
+      type: /\.(?:mp4|m4v)(?:[?#]|$)/i.test(mediaUrl) ? "mp4" : "m3u8",
       headers: { "User-Agent": headers["User-Agent"] || UA, Referer: referer },
       ...(subtitles.length ? { subtitles } : {}),
     });
@@ -530,7 +530,7 @@ async function resolveEmbedMedia(
     }
   }
 
-  const mediaRe = /https?:\\/\\/[^"'\\s<>\\\\]+?\\.(?:m3u8|mp4|m4v)(?:\\?[^"'\\s<>\\\\]*)?/gi;
+  const mediaRe = /https?:\/\/[^"'\s<>\\]+?\.(?:m3u8|mp4|m4v)(?:\?[^"'\s<>\\]*)?/gi;
   let match: RegExpExecArray | null;
   while ((match = mediaRe.exec(decoded)) !== null) addMedia(match[0], new URL(pageUrl).origin + "/");
   if (found.length) return found;
@@ -546,8 +546,8 @@ async function resolveEmbedMedia(
       const frameUrl = new URL(match[1].replace(/&amp;/g, "&"), pageUrl).toString();
       const frameHost = hostOf(frameUrl);
       if (/^https?:/i.test(frameUrl) && !seen[frameUrl] &&
-          (KNOWN_XVID_HOSTS[frameHost] || /iqsmartgames|rpmhub|p2pplay|uns\\.bio|hanerix|morencius|vibuxer|n1mwq/i.test(frameHost) ||
-           /\\/evid\\//i.test(frameUrl)) &&
+          (KNOWN_XVID_HOSTS[frameHost] || /iqsmartgames|rpmhub|p2pplay|uns\.bio|hanerix|morencius|vibuxer|n1mwq/i.test(frameHost) ||
+           /\/evid\//i.test(frameUrl)) &&
           frames.indexOf(frameUrl) < 0) frames.push(frameUrl);
     } catch {}
   }
