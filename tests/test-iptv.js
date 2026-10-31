@@ -11,6 +11,10 @@ const playlist = [
   "https://streams.example/b4u/two.m3u8",
   '#EXTINF:-1 tvg-id="Pogo.in@SD",Pogo (576p)',
   "https://streams.example/pogo/index.m3u8",
+  '#EXTINF:-1 tvg-id="WOWKidz.in@Hindi",WOW Kidz (720p)',
+  "https://streams.example/wow/hindi.m3u8",
+  '#EXTINF:-1 tvg-id="WOWKidz.in@Telugu",WOW Kidz Telugu (720p)',
+  "https://streams.example/wow/telugu.m3u8",
   '#EXTINF:-1 tvg-id="DangalTV.in@SD",Dangal TV (720p)',
   "https://streams.example/dangal/index.m3u8",
   '#EXTINF:-1 tvg-id="ColorsTamil.in@HD",Colors Tamil HD',
@@ -19,26 +23,12 @@ const playlist = [
   "https://streams.example/news/index.m3u8",
 ].join("\n");
 
-const channels = [
-  { id: "B4UMovies.in", name: "B4U Movies", categories: ["movies"] },
-  { id: "Pogo.in", name: "Pogo", categories: ["kids"] },
-  { id: "DangalTV.in", name: "Dangal TV", categories: ["general"] },
-  { id: "ColorsTamil.in", name: "Colors Tamil", categories: ["entertainment"] },
-  { id: "AajTak.in", name: "Aaj Tak", categories: ["news"] },
-];
-const logos = [
-  { channel: "B4UMovies.in", url: "https://logos.example/b4u.svg", in_use: true, format: "SVG", width: 200 },
-  { channel: "Pogo.in", url: "https://logos.example/pogo.png", in_use: true, format: "PNG", width: 200 },
-  { channel: "DangalTV.in", url: "https://logos.example/dangal.png", in_use: true, format: "PNG", width: 200 },
-];
-
 const storage = new Map();
+let playlistFetches = 0;
 const providerContext = {
   commonHeaders: {},
   axios: {
-    get: async (url) => ({
-      data: url.includes("logos.json") ? logos : url.includes("channels.json") ? channels : playlist,
-    }),
+    get: async () => { playlistFetches++; return { data: playlist }; },
   },
   kvStore: {
     get: async (key) => storage.get(key),
@@ -51,13 +41,13 @@ const providerContext = {
   const kids = await getPosts({ filter: "kids", providerContext });
   const serials = await getPosts({ filter: "serials", providerContext });
   assert.equal(movies.length, 1);
-  assert.equal(kids.length, 1);
+  assert.equal(kids.length, 2);
   assert.equal(serials.length, 1);
-  assert.equal(movies[0].image, "https://logos.example/b4u.svg");
-  assert.equal(kids[0].title, "Pogo");
-  assert.equal(serials[0].title, "Dangal TV");
+  assert.equal(movies[0].image, "https://dtil.tmsimg.com/assets/s140063_ld_h9_aa.png?lock=720x540");
+  assert.equal(kids.some((post) => post.title.includes("Telugu")), false);
   assert.equal((await getSearchPosts({ searchQuery: "dangal", providerContext })).length, 1);
   assert.equal((await getSearchPosts({ searchQuery: "colors", providerContext })).length, 0);
+  assert.equal(playlistFetches, 1, "playlist should be fetched once and reused from cache");
 
   const meta = await getMeta({ link: movies[0].link, providerContext });
   assert.equal(meta.linkList[0].directLinks.length, 2);
