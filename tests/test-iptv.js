@@ -11,6 +11,8 @@ const playlist = [
   "https://streams.example/kids/index.m3u8",
   '#EXTINF:-1 tvg-id="HindiSerial.in",Hindi Serial Channel',
   "https://streams.example/serial/index.m3u8",
+  '#EXTINF:-1 tvg-name="Zee Cinema HD",Zee Cinema HD (1080p)',
+  "https://streams.example/zeecinema/master.m3u8",
 ].join("\n");
 
 const channels = [
@@ -21,6 +23,7 @@ const channels = [
 
 const storage = new Map();
 const providerContext = {
+  commonHeaders: {},
   axios: {
     get: async (url) => ({ data: url.includes("channels.json") ? channels : playlist }),
   },
@@ -34,7 +37,7 @@ const providerContext = {
   const movies = await getPosts({ filter: "movies", providerContext });
   const kids = await getPosts({ filter: "kids", providerContext });
   const serials = await getPosts({ filter: "serials", providerContext });
-  assert.equal(movies.length, 1);
+  assert.equal(movies.length, 2);
   assert.equal(kids.length, 1);
   assert.equal(serials.length, 1);
   assert.equal(movies[0].image, "https://logos.example/movie.png");
@@ -42,6 +45,12 @@ const providerContext = {
 
   const meta = await getMeta({ link: movies[0].link, providerContext });
   assert.equal(meta.linkList[0].directLinks[0].link, "https://streams.example/movie/index.m3u8");
+  const cachelessMeta = await getMeta({
+    link: movies[0].link,
+    providerContext: { kvStore: { get: async () => undefined } },
+  });
+  assert.equal(cachelessMeta.linkList[0].directLinks[0].link, "https://streams.example/movie/index.m3u8");
+
   const streams = await getStream({ link: meta.linkList[0].directLinks[0].link, type: "movie", providerContext });
   assert.equal(streams[0].type, "m3u8");
   assert.equal(streams[0].link, "https://streams.example/movie/index.m3u8");
