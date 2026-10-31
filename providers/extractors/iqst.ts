@@ -641,6 +641,14 @@ export async function iqstExtractor(
     console.log(
       "[iqst] " + streamLinks.length + " streams in " + (Date.now() - t0) + "ms",
     );
+    if (streamLinks.length === 0) {
+      console.log("[iqst] legacy mirror API returned no playable links; trying current embedded server list");
+      const fallback = await resolveEmbedMedia(link, axios, headers, signal);
+      if (fallback.length) {
+        console.log("[iqst] current embed fallback returned " + fallback.length + " playable link(s)");
+        return fallback;
+      }
+    }
     return streamLinks;
   } catch (err: any) {
     console.error("[iqst] error: " + (err && err.message));
