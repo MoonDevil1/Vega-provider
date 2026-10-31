@@ -1,0 +1,1 @@
+"use strict";Object.defineProperty(exports,"__esModule",{value:true});exports.getStream=async function({link}){if(!/^https?:\\/\\//i.test(String(link||"")))return [];const lower=link.toLowerCase().split("?")[0],type=lower.endsWith(".mpd")?"mpd":lower.endsWith(".mp4")?"mp4":"m3u8";return [{server:"IPTV • Direct",link,type,quality:"Auto"}];};
