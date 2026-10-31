@@ -410,7 +410,7 @@ async function resolvePublicEmbed(
   url: string, signal: AbortSignal, ctx: ProviderContext,
   depth: number = 0, seen: Set<string> = new Set<string>(),
 ): Promise<Stream[]> {
-  if (depth > 2 || seen.has(url)) return [];
+  if (depth > 3 || seen.has(url)) return [];
   seen.add(url);
   const direct = directMediaStream(url, "Direct media");
   if (direct.length) return direct;
@@ -419,7 +419,7 @@ async function resolvePublicEmbed(
     const origin = new URL(url).origin;
     const r = await ctx.axios.get(url, {
       headers: { ...BASE_HEADERS, Referer: origin + "/" },
-      signal, timeout: 8000, maxRedirects: 4,
+      signal, timeout: 10000, maxRedirects: 4,
     });
     html = typeof r.data === "string" ? r.data : JSON.stringify(r.data || "");
   } catch { return []; }
@@ -438,8 +438,8 @@ async function resolvePublicEmbed(
     const media = directMediaStream(candidate, "Resolved media");
     if (media.length) return media;
   }
-  if (depth < 2) {
-    const iframeRe = /<(?:iframe|source|a)\b[^>]*\b(?:src|data-src|data-link)\s*=\s*["']([^"']+)["']/gi;
+  if (depth < 3) {
+    const iframeRe = /<(?:iframe|source|a|button|div|li)\b[^>]*\b(?:src|data-src|data-link|data-url|data-href|href)\s*=\s*["']([^"']+)["']/gi;
     const nested: string[] = [];
     while ((match = iframeRe.exec(html)) !== null) {
       try {
