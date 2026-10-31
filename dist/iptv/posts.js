@@ -44,7 +44,7 @@ const LOGOS = {
 };
 const CATEGORY_IDS_LOOKUP = new Set(Object.values(CATEGORY_IDS).flatMap((ids) => Array.from(ids)));
 function attr(line, key) {
-    const match = line.match(new RegExp("(?:^|\\s)" + key + "=(?:\\"([^\\"]*)\\"|'([^']*)')", "i"));
+    const match = line.match(new RegExp("(?:^|\\s)" + key + "=(?:\"([^\"]*)\"|'([^']*)')", "i"));
     return match ? String(match[1] || match[2] || "").trim() : "";
 }
 function canonicalId(id) { return String(id || "").trim().split("@")[0].toLowerCase(); }
