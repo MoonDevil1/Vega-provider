@@ -2,15 +2,29 @@ import { Post, ProviderContext } from "../types";
 
 const STREAMS_URL = "https://raw.githubusercontent.com/iptv-org/iptv/master/streams/in.m3u";
 const CHANNELS_URL = "https://iptv-org.github.io/api/channels.json";
-const CACHE_KEY = "iptv-org-in-hindi-v3";
+const LOGOS_URL = "https://iptv-org.github.io/api/logos.json";
+const CACHE_KEY = "iptv-org-in-hindi-v4";
 const CACHE_TTL = 10 * 60 * 1000;
 
-type ChannelInfo = { id?: string; name?: string; alt_names?: string[]; logo?: string; country?: string; languages?: string[]; categories?: string[] };
+type ChannelInfo = { id?: string; name?: string; alt_names?: string[]; categories?: string[] };
+type ChannelLogo = { channel?: string; url?: string; in_use?: boolean; format?: string; width?: number; height?: number };
 type ChannelEntry = { id: string; name: string; logo: string; url: string; group: string; language: string; info: ChannelInfo };
 
-const HINDI_GENERAL = /\b(zee tv|zee anmol|sony sab|sony entertainment television|sony entertainment|colors( tv)?|star plus|star bharat|dangal tv|&tv|and tv|rishtey|dd national|shemaroo umang|anmol|prag|epic tv)\b/i;
-const HINDI_MOVIES = /\b(zee cinema|zee bollywood|sony max|star gold|b4u movies|colors cineplex|&pictures|and pictures|utv movies|goldmines|shemaroo movies|movies now|hindi hits|all time movies|movies ok)\b/i;
-const HINDI_KIDS = /\b(pogo|hungama|discovery kids|sony yay|cartoon network|green gold|wow kidz|nick(?!elodeon jr))\b/i;
+const CATEGORY_IDS: Record<string, Set<string>> = {
+  movies: new Set([
+    "b4umovies.in", "goldmines.in", "goldmines2.in", "goldminesaction.in",
+    "goldminesbollywood.in", "goldminesmovies.in", "zeecinema.in", "colorscineplex.in",
+  ]),
+  kids: new Set([
+    "wowkidz.in", "epickids.in", "nickelodeon.in", "superhungama.in", "sonyyay.in",
+    "disneychannel.in", "hungamatv.in", "disneyjunior.in", "pogo.in",
+    "cartoonnetwork.in", "cartoonnetworkhdplus.in", "discoverykids.in", "greengoldtv.in",
+  ]),
+  serials: new Set([
+    "dangaltv.in", "dangal2.in", "ddnational.in", "epictv.in", "pasandtv.in",
+    "shemarooumang.in", "sonyentertainmenttelevision.in", "colors.in", "sonysab.in", "anmoltv.in",
+  ]),
+};
 
 function attr(line: string, key: string): string {
   const match = line.match(new RegExp("(?:^|\\s)" + key + "=(?:\"([^\"]*)\"|'([^']*)')", "i"));
@@ -22,7 +36,7 @@ function canonicalId(id: string): string {
 function slug(value: string): string {
   return String(value || "channel").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "channel";
 }
-function parsePlaylist(text: string, channelMap: Record<string, ChannelInfo>): ChannelEntry[] {
+function parsePlaylist(text: string, channelMap: Record<string, ChannelInfo>, logoMap: Record<string, string>): ChannelEntry[] {
   const entries: ChannelEntry[] = [];
   let infoLine = "";
   for (const raw of text.replace(/^\uFEFF/, "").split(/\r?\n/)) {
@@ -30,80 +44,67 @@ function parsePlaylist(text: string, channelMap: Record<string, ChannelInfo>): C
     if (!line) continue;
     if (line.startsWith("#EXTINF:")) { infoLine = line; continue; }
     if (line.startsWith("#") || !/^https?:\/\//i.test(line) || !infoLine) continue;
-
     const comma = infoLine.lastIndexOf(",");
     const playlistName = (comma >= 0 ? infoLine.slice(comma + 1) : "").trim();
     const rawId = attr(infoLine, "tvg-id");
     const tvgName = attr(infoLine, "tvg-name");
-    const logo = attr(infoLine, "tvg-logo");
-    const group = attr(infoLine, "group-title");
-    const language = attr(infoLine, "tvg-language");
-    const name = String(tvgName || playlistName).replace(/\s*\([^)]*\)\s*$/, "").replace(/\s+\d{3,4}p$/i, "").trim();
-    const id = canonicalId(rawId) || slug(name);
-    const info = channelMap[rawId] || channelMap[id] || {};
-    if (name && id) entries.push({ id, name, logo: String(logo || info.logo || ""), url: line, group, language, info });
+    const id = canonicalId(rawId) || slug(tvgName || playlistName);
+    const info = channelMap[id] || {};
+    const name = String(tvgName || info.name || playlistName).replace(/\s*\([^)]*\)\s*$/, "").replace(/\s+\d{3,4}p$/i, "").trim();
+    if (name && id) {
+      const url = line;
+      // Keep every distinct source URL for a channel; getMeta exposes these as
+      // alternate streams instead of silently throwing away mirrors/qualities.
+      if (!entries.some((entry) => entry.id === id && entry.url === url)) {
+        entries.push({ id, name, logo: attr(infoLine, "tvg-logo") || logoMap[id] || "", url, group: attr(infoLine, "group-title"), language: attr(infoLine, "tvg-language"), info });
+      }
+    }
     infoLine = "";
   }
   return entries;
 }
 async function loadEntries(providerContext: ProviderContext): Promise<ChannelEntry[]> {
-  const { axios, kvStore, commonHeaders } = providerContext;
+  const { axios, kvStore, commonHeaders = {} } = providerContext;
   try {
     const cached = await kvStore.get<{ savedAt: number; entries: ChannelEntry[] }>(CACHE_KEY);
     if (cached && Date.now() - cached.savedAt < CACHE_TTL && Array.isArray(cached.entries) && cached.entries.length) return cached.entries;
   } catch {}
 
-  const playlistResponse = await axios.get(STREAMS_URL, {
-    headers: { ...commonHeaders, Accept: "text/plain,*/*", "User-Agent": commonHeaders["User-Agent"] || "Mozilla/5.0 Vega-IPTV/1.1" },
-    timeout: 25000,
-    responseType: "text",
-  });
+  const headers = { ...commonHeaders, "User-Agent": commonHeaders["User-Agent"] || "Mozilla/5.0 Vega-IPTV/1.2" };
+  const playlistResponse = await axios.get(STREAMS_URL, { headers: { ...headers, Accept: "text/plain,*/*" }, timeout: 30000, responseType: "text" });
   const playlist = String(playlistResponse.data || "");
   if (!playlist.trim().startsWith("#EXTM3U")) throw new Error("IPTV source did not return an M3U playlist");
 
   const channelMap: Record<string, ChannelInfo> = {};
   try {
-    const response = await axios.get(CHANNELS_URL, {
-      headers: { ...commonHeaders, Accept: "application/json" },
-      timeout: 15000,
-    });
+    const response = await axios.get(CHANNELS_URL, { headers: { ...headers, Accept: "application/json" }, timeout: 20000 });
     for (const channel of Array.isArray(response.data) ? response.data : []) {
-      if (channel && channel.id) {
-        channelMap[String(channel.id)] = channel;
-        channelMap[canonicalId(String(channel.id))] = channel;
-      }
+      if (channel && channel.id) channelMap[String(channel.id).toLowerCase()] = channel;
     }
   } catch (error) {
-    console.warn("[IPTV] Optional channel metadata unavailable; continuing with M3U data", error);
+    console.warn("[IPTV] Channel metadata unavailable; using curated channel IDs", error);
   }
 
-  const entries = parsePlaylist(playlist, channelMap);
+  const logoMap: Record<string, string> = {};
+  try {
+    const response = await axios.get(LOGOS_URL, { headers: { ...headers, Accept: "application/json" }, timeout: 20000 });
+    const logos = Array.isArray(response.data) ? response.data as ChannelLogo[] : [];
+    for (const logo of logos) {
+      const id = String(logo.channel || "").toLowerCase();
+      if (!id || !logo.url || logo.in_use === false) continue;
+      const previous = logoMap[id];
+      if (!previous || (logo.format === "SVG") || (logo.width || 0) >= 100) logoMap[id] = logo.url;
+    }
+  } catch (error) {
+    console.warn("[IPTV] Optional logo metadata unavailable; continuing without logos", error);
+  }
+
+  const entries = parsePlaylist(playlist, channelMap, logoMap);
   if (!entries.length) throw new Error("IPTV India playlist contained no usable channel entries");
   try { await kvStore.set(CACHE_KEY, { savedAt: Date.now(), entries }); } catch {}
   return entries;
 }
-function isHindi(entry: ChannelEntry): boolean {
-  const info = entry.info || {};
-  const languages = Array.isArray(info.languages) ? info.languages : [];
-  const altNames = Array.isArray(info.alt_names) ? info.alt_names : [];
-  const text = [entry.name, ...altNames, entry.group, entry.language, entry.id].join(" ");
-  return languages.some((language) => /^(hin|hindi)$/i.test(language)) ||
-    /\bhindi\b|@hindi/i.test(text) ||
-    HINDI_GENERAL.test(text) || HINDI_MOVIES.test(text) || HINDI_KIDS.test(text) ||
-    /^(zeetv|zeeanmol|sonysab|sonyyay|starplus|starbharat|dangaltv|andtv|ddnational|pogo|hungama|discoverykids|greengoldtv|cartoonnetwork|zeecinema|zeebollywood|sonymax|stargold|b4umovies|colorscineplex)\.in$/i.test(entry.id);
-}
-function matchesCategory(entry: ChannelEntry, category: string): boolean {
-  const name = [entry.name, ...(entry.info.alt_names || [])].join(" ");
-  const cats = Array.isArray(entry.info.categories) ? entry.info.categories : [];
-  const group = entry.group.toLowerCase();
-  if (category === "movies") return cats.includes("movies") || HINDI_MOVIES.test(name) || /movie|cinema|film|picture/i.test(name) || /movie|cinema/i.test(group);
-  if (category === "kids") return cats.includes("kids") || HINDI_KIDS.test(name) || /kids|cartoon|children/i.test(group);
-  const excluded = cats.includes("movies") || cats.includes("kids") || HINDI_MOVIES.test(name) || HINDI_KIDS.test(name) || /movie|cinema|film|kids|cartoon|children/i.test(name);
-  return !excluded && (cats.includes("entertainment") || cats.includes("general") || HINDI_GENERAL.test(name) || /entertainment|general|serial/i.test(group));
-}
 function toPost(entry: ChannelEntry): Post {
-  // Include one playable URL in the post link as a fallback if the app runs metadata
-  // resolution in a fresh worker where the provider KV cache is not yet hydrated.
   return {
     title: entry.name,
     link: "iptv://channel/" + encodeURIComponent(entry.id) + "?stream=" + encodeURIComponent(entry.url),
@@ -114,12 +115,13 @@ function toPost(entry: ChannelEntry): Post {
   };
 }
 export const getPosts = async function ({ filter, providerContext }: { filter: string; page?: number; providerValue?: string; signal?: AbortSignal; providerContext: ProviderContext }): Promise<Post[]> {
-  const category = String(filter || "movies").toLowerCase();
-  if (!["movies", "kids", "serials"].includes(category)) return [];
+  const category = String(filter || "").toLowerCase();
+  const allowed = CATEGORY_IDS[category];
+  if (!allowed) return [];
   const entries = await loadEntries(providerContext);
   const seen = new Set<string>();
   return entries.filter((entry) => {
-    if (!isHindi(entry) || !matchesCategory(entry, category) || seen.has(entry.id)) return false;
+    if (!allowed.has(entry.id) || seen.has(entry.id)) return false;
     seen.add(entry.id);
     return true;
   }).map(toPost);
@@ -129,6 +131,6 @@ export const getSearchPosts = async function ({ searchQuery, providerContext }: 
   if (!query) return [];
   const entries = await loadEntries(providerContext);
   const seen = new Set<string>();
-  return entries.filter((entry) => isHindi(entry) && entry.name.toLowerCase().includes(query))
+  return entries.filter((entry) => Object.values(CATEGORY_IDS).some((ids) => ids.has(entry.id)) && entry.name.toLowerCase().includes(query))
     .filter((entry) => { if (seen.has(entry.id)) return false; seen.add(entry.id); return true; }).map(toPost);
 };
