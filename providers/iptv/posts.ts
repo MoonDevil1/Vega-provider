@@ -107,7 +107,7 @@ export const getPosts = async function ({
   for (const entry of entries) {
     if (!isHindi(entry) || !matchesCategory(entry, category) || seen.has(entry.id)) continue;
     seen.add(entry.id);
-    posts.push({ title: entry.name, link: entry.url, image: entry.logo, provider: "iptv", tag: "LIVE", cornerTag: "LIVE" });
+    posts.push({ title: entry.name, link: "iptv://channel/" + encodeURIComponent(entry.id), image: entry.logo, provider: "iptv", tag: "LIVE", cornerTag: "LIVE" });
   }
   return posts;
 };
@@ -124,5 +124,5 @@ export const getSearchPosts = async function ({
   return entries
     .filter((entry) => isHindi(entry) && entry.name.toLowerCase().includes(query))
     .filter((entry) => { if (seen.has(entry.id)) return false; seen.add(entry.id); return true; })
-    .map((entry) => ({ title: entry.name, link: entry.url, image: entry.logo, provider: "iptv", tag: "LIVE", cornerTag: "LIVE" }));
+    .map((entry) => ({ title: entry.name, link: "iptv://channel/" + encodeURIComponent(entry.id), image: entry.logo, provider: "iptv", tag: "LIVE", cornerTag: "LIVE" }));
 };
