@@ -154,7 +154,7 @@ async function fetchFiles(
   const html: string = res.data;
 
   console.log("[iqst] embed bytes: " + html.length);
-    if (/data-link\\s*=\\s*["']https?:\\/\\/pro\\.iqsmartgames\\.com\\/evid\\//i.test(html)) {
+    if (/data-link\s*=\s*["']https?:\/\/pro\.iqsmartgames\.com\/evid\//i.test(html)) {
       console.log("[iqst] current evid server list detected; skip legacy file API");
       return [];
     }
