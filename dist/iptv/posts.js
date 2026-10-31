@@ -65,9 +65,9 @@ function parsePlaylist(text) {
         const feed = String(rawId.split("@")[1] || "").toLowerCase();
         const name = String(attr(infoLine, "tvg-name") || playlistName).replace(/\s*\([^)]*\)\s*$/, "").replace(/\s+\d{3,4}p$/i, "").trim();
         const url = line;
-        if (id && name && !regionalFeeds.has(feed) && CATEGORY_IDS_LOOKUP.has(id) && !seenUrls.has(url)) {
+        if (id && name && !regionalFeeds.has(feed) && CATEGORY_IDS_LOOKUP.has(id) && !seenUrls.has(id + "|" + url)) {
             entries.push({ id, feed, name, logo: attr(infoLine, "tvg-logo") || LOGOS[id] || "", url });
-            seenUrls.add(url);
+            seenUrls.add(id + "|" + url);
         }
         infoLine = "";
     }
